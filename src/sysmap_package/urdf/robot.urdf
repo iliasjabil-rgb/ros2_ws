@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="URDF_v1.SLDASM">
+  <link
+    name="base">
+    <inertial>
+      <origin
+        xyz="0.094649 -0.046556 -0.092252"
+        rpy="0 0 0" />
+      <mass
+        value="5.3282" />
+      <inertia
+        ixx="0.042002"
+        ixy="3.7239E-05"
+        ixz="2.5658E-17"
+        iyy="0.099788"
+        iyz="6.3578E-18"
+        izz="0.12213" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/base.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 0.50196 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/base.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="gliss_poteaux">
+    <inertial>
+      <origin
+        xyz="0.11166 0.031392 0.43751"
+        rpy="0 0 0" />
+      <mass
+        value="0.5009" />
+      <inertia
+        ixx="0.0017002"
+        ixy="-1.7782E-08"
+        ixz="-2.9323E-19"
+        iyy="0.0036788"
+        iyz="-2.3225E-06"
+        izz="0.0024273" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/gliss_poteaux.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/gliss_poteaux.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="gliss_poteaux"
+    type="prismatic">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base" />
+    <child
+      link="gliss_poteaux" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="gliss_bras">
+    <inertial>
+      <origin
+        xyz="0.5705 -0.02058 -0.011047"
+        rpy="0 0 0" />
+      <mass
+        value="0.33517" />
+      <inertia
+        ixx="0.00042422"
+        ixy="-5.1329E-06"
+        ixz="-1.9818E-18"
+        iyy="0.002735"
+        iyz="-1.4414E-07"
+        izz="0.0028909" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/gliss_bras.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/gliss_bras.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="gliss_bras"
+    type="prismatic">
+    <origin
+      xyz="0.293424939554273 0.0679999999999994 0.485545508212099"
+      rpy="0 0 -3.14159265358979" />
+    <parent
+      link="gliss_poteaux" />
+    <child
+      link="gliss_bras" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="0"
+      upper="0" 
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="verrin">
+    <inertial>
+      <origin
+        xyz="-0.012557 0.0072673 0.19071"
+        rpy="0 0 0" />
+      <mass
+        value="0.66179" />
+      <inertia
+        ixx="0.0019699"
+        ixy="0.00020748"
+        ixz="-0.00015373"
+        iyy="0.0022107"
+        iyz="8.8756E-05"
+        izz="0.0011449" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/verrin.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/verrin.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="verrin"
+    type="prismatic">
+    <origin
+      xyz="0.642132486540519 -0.0799999999999959 -0.0299999999999994"
+      rpy="3.14159265358979 0 0" />
+    <parent
+      link="gliss_bras" />
+    <child
+      link="verrin" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="rot_pince">
+    <inertial>
+      <origin
+        xyz="0.00029402 4.3448E-05 0.06931"
+        rpy="0 0 0" />
+      <mass
+        value="0.545" />
+      <inertia
+        ixx="0.00039633"
+        ixy="5.316E-07"
+        ixz="2.4573E-07"
+        iyy="0.00039731"
+        iyz="-4.176E-07"
+        izz="0.00063837" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/rot_pince.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 0.94902 0.9098 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://sysmap_package/meshes/rot_pince.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="rot_pince"
+    type="revolute">
+    <origin
+      xyz="-2.88675134791916E-05 4.99999999660494E-05 0.467189113302821"
+      rpy="0 0 3.14159265358979" />
+    <parent
+      link="verrin" />
+    <child
+      link="rot_pince" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>

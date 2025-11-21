@@ -1,0 +1,51 @@
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+# Note : *.so bloque déjà votre gros fichier libtensorflow, c'est bien !
+
+# Packages #
+############
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+*.sql
+*.sqlite
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+__pycache__/
+
+# ROS2 specific #
+#################
+build/
+install/
+log/
+
+# Folders to ignore #
+#####################
+venv_suivi/
+urdf_v1_sldasm/
+urdf_tutorial_cpp/
+src/Vision_IA/Vision_IA/tf_convert_env/
+tf_convert_env/

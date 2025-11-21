@@ -1,0 +1,148 @@
+<?xml version="1.0"?>
+<robot name="RICA">
+
+  <material name="blue">
+    <color rgba="0 0 0.8 1"/>
+  </material>
+
+  <material name="white">
+    <color rgba="1 1 1 1"/>
+  </material>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box  size="0.54 0.39 0.15"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="front_left_leg">
+    <visual>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 0.06 0.17"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 0.06 0.17"/>
+    </collision>
+  </link>
+
+  <joint name="base_to_front_left_leg" type="revolute">
+    <axis xyz="0 1 0"/>
+    <limit effort="1000.0" lower="0.0" upper="6.28" velocity="0.5"/>
+    <parent link="base_link"/>
+    <child link="front_left_leg"/>
+    <origin xyz="0.20 0.195 -0.04"/>
+  </joint>
+
+  <link name="front_right_leg">
+    <visual>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 -0.06 0.17"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 -0.06 0.17"/>
+    </collision>
+  </link>
+
+  <joint name="base_to_front_right_leg" type="revolute">
+    <axis xyz="0 1 0"/>
+    <limit effort="1000.0" lower="0.0" upper="6.28" velocity="0.5"/>
+    <parent link="base_link"/>
+    <child link="front_right_leg"/>
+    <origin xyz="0.20 -0.195 -0.04"/>
+  </joint>
+
+    <link name="back_left_leg">
+    <visual>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 0.06 0.17"/>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 0.06 0.17"/>
+    </collision>
+  </link>
+
+  <joint name="base_to_back_left_leg" type="revolute">
+    <axis xyz="0 1 0"/>
+    <limit effort="1000.0" lower="-6.28" upper="0.0" velocity="-0.5"/>
+    <parent link="base_link"/>
+    <child link="back_left_leg"/>
+    <origin xyz="-0.20 0.195 -0.04"/>
+  </joint>
+
+    <link name="back_right_leg">
+    <visual>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 -0.06 0.17"/>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.41 0.04 0.1"/>
+      </geometry>
+      <origin rpy="0 1.57075 0" xyz="0 -0.06 0.17"/>
+    </collision>  
+  </link>
+
+  <joint name="base_to_back_right_leg" type="revolute">
+    <axis xyz="0 1 0"/>
+    <limit effort="1000.0" lower="-6.28" upper="0.0" velocity="0.5"/>
+    <parent link="base_link"/>
+    <child link="back_right_leg"/>
+    <origin xyz="-0.20 -0.195 -0.04"/>
+  </joint>
+
+    <link name="left_side">
+    <visual>
+      <geometry>
+        <box size="0.54 0.04 0.15"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0.02 0"/>
+      <material name="blue"/>
+    </visual>
+  </link>
+
+<joint name="base_to_left_side" type="revolute">
+  <parent link="base_link"/><child link="left_side"/>
+  <origin xyz="0 0.195 0"/>
+  <axis xyz="0 1 0"/>
+  <limit lower="-1.57" upper="1.57" effort="50" velocity="1.0"/>
+</joint>
+
+    <link name="right_side">
+    <visual>
+      <geometry>
+        <box size="0.54 0.04 0.15"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 -0.02 0"/>
+      <material name="white"/>
+    </visual>
+  </link>
+
+ <joint name="base_to_right_side" type="revolute">
+  <parent link="base_link"/><child link="right_side"/>
+  <origin xyz="0 -0.195 0"/>
+  <axis xyz="0 1 0"/>
+  <limit lower="-1.57" upper="1.57" effort="50" velocity="1.0"/>
+</joint>
+</robot>

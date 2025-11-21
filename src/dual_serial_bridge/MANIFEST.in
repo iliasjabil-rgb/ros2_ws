@@ -1,0 +1,5 @@
+include package.xml
+recursive-include resource *
+recursive-include dual_serial_bridge *.py
+recursive-include launch *.py
+recursive-include config *.yaml

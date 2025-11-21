@@ -1,0 +1,13 @@
+dual_serial_bridge:
+  ros__parameters:
+    baud: 115200
+
+mega_bridge:
+  ros__parameters:
+    port: "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_7513030393535130D120-if00"
+    baud: 115200
+
+uno_bridge:
+  ros__parameters:
+    port: "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_4423831383835151A2D1-if00"
+    baud: 115200

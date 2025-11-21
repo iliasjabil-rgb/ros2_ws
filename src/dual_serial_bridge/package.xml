@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>dual_serial_bridge</name>
+  <version>0.2.0</version>
+  <description>ROS 2 bridges for Arduino MEGA/UNO over serial (JSON line protocol).</description>
+  <maintainer email="iliasjabil@gmail.com">ilias</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+
+  <exec_depend>python3-serial</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
