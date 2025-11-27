@@ -8,7 +8,16 @@ def generate_launch_description():
         package='Vision_IA',
         executable='camera',
         name='camera_node',
-        output='screen'
+        output='screen',
+        parameters=[
+            # --- Configuration Caméra 1 ---
+            {'camera_index_1': 0},
+            {'topic_name_1': '/video_cam'},
+            
+            # --- Configuration Caméra 2 ---
+            {'camera_index_2': 2},        # L'index validé avec ffplay
+            {'topic_name_2': '/video_cam_2'},
+        ]
     )
 
     # --- 2️⃣ Nœud YOLO / suivi de personne ---
