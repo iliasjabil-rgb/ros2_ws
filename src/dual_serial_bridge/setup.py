@@ -18,10 +18,12 @@ setup(
     maintainer_email='iliasjabil@gmail.com',
     description='ROS 2 serial bridges for Arduino MEGA and UNO',
     license='MIT',
-    entry_points={
+   entry_points={
         'console_scripts': [
             'mega_bridge = dual_serial_bridge.mega_bridge:main',
+            'mega_driver = dual_serial_bridge.mega_driver:main',
             'uno_bridge  = dual_serial_bridge.uno_bridge:main',
+            'uno_driver  = dual_serial_bridge.uno_driver:main',
         ],
     },
 )

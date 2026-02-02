@@ -1,62 +1,91 @@
+#!/usr/bin/env python3
+import threading
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32MultiArray, String
-from .serial_utils import SerialReader
-from .json_utils import parse_json_line
+from std_msgs.msg import String
+import serial
 
 class MegaBridge(Node):
     def __init__(self):
         super().__init__('mega_bridge')
+
+        # Paramètres
         self.declare_parameter('port', '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_7513030393535130D120-if00')
         self.declare_parameter('baud', 115200)
+
         port = self.get_parameter('port').get_parameter_value().string_value
         baud = self.get_parameter('baud').get_parameter_value().integer_value
 
-        self.pub_pos    = self.create_publisher(Int32MultiArray, 'mega/pos',    10)
-        self.pub_limits = self.create_publisher(Int32MultiArray, 'mega/limits', 10)
-        self.pub_events = self.create_publisher(String,           'mega/events', 10)
-
-        self.sub_cmd = self.create_subscription(String, 'mega/cmd', self.on_cmd, 10)
-
-        self.get_logger().info(f'Opening MEGA serial {port} @ {baud}')
+        # Connexion Série
         try:
-            self.ser = SerialReader(port, baud, self.on_line, self.on_serial_error)
-            self.ser.start()
-        except Exception as e:
-            self.get_logger().error(f'Cannot open serial: {e}')
+            self.ser = serial.Serial(port, baudrate=baud, timeout=0.1)
+            self.get_logger().info(f'MEGA serial bridge démarré sur {port} @ {baud}')
+        except serial.SerialException as e:
+            self.get_logger().error(f"Erreur ouverture port MEGA: {e}")
             raise
 
-    def on_cmd(self, msg: String):
-        # forward tel quel (doit être une ligne JSON)
-        self.ser.write_line(msg.data)
+        self.ser_lock = threading.Lock()
 
-    def on_line(self, line: str):
-        data = parse_json_line(line)
-        if data is None:
-            return
-        # Positions : {"src":"mega","pos":[...]}
-        if isinstance(data, dict) and 'pos' in data and isinstance(data['pos'], list):
-            out = Int32MultiArray(data=data['pos'])
-            self.pub_pos.publish(out)
-        # Fins de course : {"src":"mega","mr":[...]}
-        elif isinstance(data, dict) and 'mr' in data and isinstance(data['mr'], list):
-            out = Int32MultiArray(data=data['mr'])
-            self.pub_limits.publish(out)
-        # Tout le reste -> events (JSON brut ou _raw)
-        else:
-            txt = line.strip()
-            self.pub_events.publish(String(data=txt))
+        # ROS I/O
+        self.raw_pub = self.create_publisher(String, 'mega/raw', 10)
+        self.cmd_sub = self.create_subscription(String, 'mega/cmd', self.cmd_cb, 10)
 
-    def on_serial_error(self, e: Exception):
-        self.get_logger().error(f'Serial error: {e}')
+        # Thread de lecture
+        self.stop_event = threading.Event()
+        self.reader_thread = threading.Thread(target=self.read_loop, daemon=True)
+        self.reader_thread.start()
 
-def main():
-    rclpy.init()
+    def cmd_cb(self, msg: String):
+        """ Reçoit une commande JSON brute (depuis Joystick) et l'envoie à l'Arduino """
+        line = msg.data
+        if not line.endswith('\n'):
+            line += '\n'
+        data = line.encode('utf-8', errors='ignore')
+        
+        with self.ser_lock:
+            try:
+                self.ser.write(data)
+            except serial.SerialException as e:
+                self.get_logger().error(f'Erreur écriture MEGA: {e}')
+
+    def read_loop(self):
+        """ Lit le port série en boucle et publie sur mega/raw """
+        buffer = ""
+        while not self.stop_event.is_set():
+            try:
+                chunk = self.ser.read(256)
+            except Exception:
+                break
+            
+            if not chunk: continue
+            
+            try:
+                text = chunk.decode('utf-8', errors='ignore')
+            except UnicodeDecodeError:
+                continue
+
+            buffer += text
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                line = line.strip()
+                if line:
+                    msg = String()
+                    msg.data = line
+                    self.raw_pub.publish(msg)
+
+    def destroy_node(self):
+        self.stop_event.set()
+        if hasattr(self, 'ser') and self.ser.is_open:
+            self.ser.close()
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
     node = MegaBridge()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
-        try: node.ser.stop()
-        except: pass
         node.destroy_node()
         rclpy.shutdown()

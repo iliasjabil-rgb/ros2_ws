@@ -28,6 +28,8 @@ setup(
         'console_scripts': [
             # MODIFICATION ICI (sysmap_package.manipulator_teleop) :
             'sysmap_teleop = sysmap_package.manipulator_teleop:main',
+            'sysmap_joystick = sysmap_package.sysmap_joystick:main',
+            'simple_servo3 = sysmap_package.simple_servo3_test:main',
         ],
     },
 )
