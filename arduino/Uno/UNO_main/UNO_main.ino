@@ -218,7 +218,7 @@ if (line.indexOf("\"cmd\":\"servo\"")>=0) {
 
 
   else if (line.indexOf("\"cmd\":\"led\"") >= 0) {
-    int r = 0, g = 0, b = 0, a = 255; // a = luminosité par défaut (max)
+    int r = 255, g = 255, b = 255, a = 255; // a = luminosité par défaut (max)
     int p;
 
     p = line.indexOf("\"r\":"); if (p >= 0) r = line.substring(p + 4).toInt();
