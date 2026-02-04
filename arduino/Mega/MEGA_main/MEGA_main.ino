@@ -7,28 +7,19 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <Adafruit_INA260.h>
+#include "pins_mega.h"
 
 // ================= CONFIGURATION =================
 const bool HAS_INA260 = true; // Mettre à false si pas de capteur de courant
-
-// Pins Moteurs (STEP, DIR, EN)
-const uint8_t P1_STEP = 31, P1_DIR = 33, P1_EN = 30;
-const uint8_t P2_STEP = 25, P2_DIR = 24, P2_EN = 27;
-const uint8_t P3_STEP = 39, P3_DIR = 41, P3_EN = 38;
-const uint8_t P4_STEP = 35, P4_DIR = 29, P4_EN = 26;
-
-// Pins Capteurs (Fins de course)
-const uint8_t P1_LIMIT = 42;
-// Ajoutez les autres ici si câblés (ex: const uint8_t P2_LIMIT = 43;)
 
 // Sécurité : Sens du mouvement vers le capteur (-1 ou 1)
 const int SENS_VERS_CAPTEUR_01 = -1; 
 
 // ================= GLOBALES =================
-AccelStepper ST1(AccelStepper::DRIVER, P1_STEP, P1_DIR);
-AccelStepper ST2(AccelStepper::DRIVER, P2_STEP, P2_DIR);
-AccelStepper ST3(AccelStepper::DRIVER, P3_STEP, P3_DIR);
-AccelStepper ST4(AccelStepper::DRIVER, P4_STEP, P4_DIR);
+AccelStepper ST1(AccelStepper::DRIVER, MEGA_001MO_STEP, MEGA_001MO_DIR);
+AccelStepper ST2(AccelStepper::DRIVER, MEGA_002MO_STEP, MEGA_002MO_DIR);
+AccelStepper ST3(AccelStepper::DRIVER, MEGA_003MO_STEP, MEGA_003MO_DIR);
+AccelStepper ST4(AccelStepper::DRIVER, MEGA_004MO_STEP, MEGA_004MO_DIR);
 
 Adafruit_INA260 ina260;
 bool g_ina_found = false;
@@ -44,9 +35,9 @@ void setup() {
   Serial.begin(115200);
 
   // Init Pins
-  pinMode(P1_EN, OUTPUT); pinMode(P2_EN, OUTPUT);
-  pinMode(P3_EN, OUTPUT); pinMode(P4_EN, OUTPUT);
-  pinMode(P1_LIMIT, INPUT_PULLUP); // LOW = Activé
+  pinMode(MEGA_001MO_EN, OUTPUT); pinMode(MEGA_002MO_EN, OUTPUT);
+  pinMode(MEGA_003MO_EN, OUTPUT); pinMode(MEGA_004MO_EN, OUTPUT);
+  pinMode(MEGA_001MR_PIN, INPUT_PULLUP); // LOW = Activé
 
   // Init Steppers
   ST1.setPinsInverted(false, false, true); // Enable inversé
@@ -73,7 +64,7 @@ void setup() {
 // ================= LOOP =================
 void loop() {
   // 1. SÉCURITÉ HARDWARE (Axe 1)
-  bool limit1_hit = (digitalRead(P1_LIMIT) == LOW);
+  bool limit1_hit = (digitalRead(MEGA_001MR_PIN) == LOW);
   
   // Si capteur touché ET on essaye d'aller encore plus loin -> STOP NET
   if (limit1_hit && (ST1.distanceToGo() * SENS_VERS_CAPTEUR_01 > 0)) {
@@ -163,7 +154,7 @@ void sendLimits() {
   docTx["src"] = "mega";
   JsonArray mr = docTx["mr"].to<JsonArray>();
   // 1 = Capteur activé, 0 = libre (Inversion de logic si INPUT_PULLUP)
-  mr.add(digitalRead(P1_LIMIT) == LOW ? 1 : 0);
+  mr.add(digitalRead(MEGA_001MR_PIN) == LOW ? 1 : 0);
   mr.add(0); // Placeholder Axe 2
   mr.add(0); // Placeholder Axe 3
   mr.add(0); // Placeholder Axe 4
