@@ -9,7 +9,7 @@ import sys
 class TwoCameraNode(Node):
     def __init__(self):
         # Le nom du nœud ROS 2 est 'camera_node'
-        super().__init__('camera_node')
+        super().__init__('camera')
         
         # --- 1. Paramètres de Configuration ---
 

@@ -5,7 +5,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # --- 1️⃣ Nœud caméra ---
     camera_node = Node(
-        package='Vision_IA',
+        package='vision_ia',
         executable='camera',
         name='camera_node',
         output='screen',
@@ -22,7 +22,7 @@ def generate_launch_description():
 
     # --- 2️⃣ Nœud YOLO / suivi de personne ---
     vision_ia_node = Node(
-        package='Vision_IA',
+        package='vision_ia',
         executable='vision_IA',
         name='vision_IA_node',
         output='screen'

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>Vision_IA</name>
+  <name>vision_ia</name>
   <version>0.0.0</version>
   <description>Package ROS2 pour le suivi de personne avec caméra et YOLO + DeepSORT</description>
   <maintainer email="godefroi@todo.todo">godefroi</maintainer>
