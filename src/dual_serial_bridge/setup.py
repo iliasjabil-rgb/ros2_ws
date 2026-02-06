@@ -1,4 +1,6 @@
-from setuptools import setup
+import os
+from glob import glob
+from setuptools import find_packages, setup
 
 package_name = 'dual_serial_bridge'
 
@@ -11,6 +13,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/dual_serial_bridges.launch.py']),
         ('share/' + package_name + '/config', ['config/bridges.params.yaml']),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
@@ -24,6 +27,7 @@ setup(
             'mega_driver = dual_serial_bridge.mega_driver:main',
             'uno_bridge  = dual_serial_bridge.uno_bridge:main',
             'uno_driver  = dual_serial_bridge.uno_driver:main',
+            'system_monitor = dual_serial_bridge.system_monitor:main',
         ],
     },
 )

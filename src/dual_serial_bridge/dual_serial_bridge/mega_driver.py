@@ -3,7 +3,7 @@ import json
 import rclpy
 from rclpy.node import Node
 # IMPORT CORRECT : On a besoin de ces types
-from std_msgs.msg import String, Int32MultiArray, Float32MultiArray
+from std_msgs.msg import String, Int32MultiArray, Float32MultiArray, Bool
 
 class MegaDriver(Node):
     def __init__(self):
@@ -18,13 +18,27 @@ class MegaDriver(Node):
         self.pub_power  = self.create_publisher(Float32MultiArray, 'mega/pwr',    10)
         # Messages systèmes (Boot, erreurs...)
         self.pub_events = self.create_publisher(String,            'mega/events', 10)
+        # Publisher pour le voyant Foxglove
+        self.pub_status = self.create_publisher(Bool,              'status/mega', 10)
+        
+        # Gestion du temps pour le Watchdog
+        self.last_msg_time = self.get_clock().now()
+        self.create_timer(1.0, self.check_connection)
 
         # --- Subscriber (Entrée depuis le Bridge) ---
         self.sub_raw = self.create_subscription(String, 'mega/raw', self.raw_cb, 10)
 
         self.get_logger().info('MEGA Driver démarré (JSON Parser).')
+    # Fonction qui vérifie la connexion chaque seconde
+    def check_connection(self):
+        # Calcul du temps écoulé depuis le dernier message reçu
+        elapsed = (self.get_clock().now() - self.last_msg_time).nanoseconds / 1e9
+        # Si moins de 3 secondes de silence -> Connecté (Vrai), sinon Déconnecté (Faux)
+        is_connected = elapsed < 3.0
+        self.pub_status.publish(Bool(data=is_connected))
 
     def raw_cb(self, msg: String):
+        self.last_msg_time = self.get_clock().now()
         line = msg.data
         try:
             data = json.loads(line)

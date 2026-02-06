@@ -22,6 +22,11 @@ class UnoDriver(Node):
         # --- Publisher JSON -> UNO ---
         self.cmd_pub  = self.create_publisher(String, 'uno/cmd', 10)
 
+        # --- NOUVEAU : STATUS WATCHDOG (Voyant Foxglove) ---
+        self.status_pub = self.create_publisher(Bool, 'status/uno', 10)
+        self.last_msg_time = self.get_clock().now()
+        self.create_timer(1.0, self.check_connection_callback)
+
         # --- Subscribers télémétrie & commandes ---
         self.raw_sub = self.create_subscription(String, 'uno/raw', self.raw_cb, 10)
 
@@ -55,7 +60,13 @@ class UnoDriver(Node):
         # Active la mise à jour automatique quand on touche Foxglove
         self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.get_logger().info('UNO driver démarré (Support Foxglove Parameters activé).')
+        self.get_logger().info('UNO driver démarré (LEDs + Watchdog Actifs).')
+
+        # --- WATCHDOG ---
+    def check_connection_callback(self):
+        elapsed = (self.get_clock().now() - self.last_msg_time).nanoseconds / 1e9
+        is_connected = elapsed < 3.0 
+        self.status_pub.publish(Bool(data=is_connected))
 
     # ------------------------------------------------------------------
     # GESTION DES PARAMÈTRES FOXGLOVE
@@ -74,9 +85,8 @@ class UnoDriver(Node):
             if param.name == 'led_blue': b = param.value
             if param.name == 'led_intensity': a = param.value
 
-        # Envoi à l'Arduino
+        self.get_logger().info(f"PARAM CHANGE: R={r} G={g} B={b} A={a}")
         self.send_led_manual(r, g, b, a)
-        
         return SetParametersResult(successful=True)
 
     def send_led_manual(self, r, g, b, a):
@@ -158,22 +168,17 @@ class UnoDriver(Node):
     # ------------------------------------------------------------------
     # /uno/raw -> parsing JSON -> topics typés
     # ------------------------------------------------------------------
+    # --- RECEPTION RAW ---
     def raw_cb(self, msg: String):
+        self.last_msg_time = self.get_clock().now() # Reset Watchdog
         line = msg.data.strip()
-        if not line:
-            return
-
+        if not line: return
         try:
             obj = json.loads(line)
-        except json.JSONDecodeError:
-            self.get_logger().debug(f"Ligne non-JSON depuis UNO: {line}")
-            return
-
-        if obj.get("src", "") != "uno":
-            return
-
+        except json.JSONDecodeError: return
+        if obj.get("src", "") != "uno": return
         self.handle_telemetry(obj)
-
+        
     def handle_telemetry(self, obj: dict):
         # Events simples
         if "event" in obj and "temp_c" not in obj and "dist_mm" not in obj:
