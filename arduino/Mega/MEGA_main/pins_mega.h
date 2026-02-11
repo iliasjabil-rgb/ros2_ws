@@ -6,10 +6,10 @@
 #define MEGA_FW_VERSION "1.0"
 
 /*** ======== MOTEURS PAS-A-PAS (DRIVERS 002DM) =========
- *  001MO : Colonne
+ *  001MO : Colonne Z
  *  002MO : Stockage
- *  003MO : Déplacement tige
- *  004MO : Tige rétractable
+ *  003MO : Déplacement tige Y 
+ *  004MO : Tige rétractable (verrin vis)
  */
 static const uint8_t MEGA_001MO_STEP = 22;
 static const uint8_t MEGA_001MO_DIR  = 23;
