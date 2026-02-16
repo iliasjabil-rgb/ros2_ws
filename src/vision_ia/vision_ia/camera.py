@@ -5,9 +5,7 @@ from sensor_msgs.msg import CompressedImage
 import cv2
 import numpy as np
 import subprocess
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.qos import qos_profile_sensor_data
+import threading # <--- INDISPENSABLE POUR LA FLUIDITÉ
 
 class TwoCameraNode(Node):
     def __init__(self):
@@ -25,28 +23,28 @@ class TwoCameraNode(Node):
         cam_index_2 = self.get_parameter('camera_index_2').value
         topic_name_2 = self.get_parameter('topic_name_2').value
 
-        self.callback_group = ReentrantCallbackGroup()
-
-        self.get_logger().info("Démarrage Nœud Double Caméra (V4L2 Hack + ROS 2 Compression)")
+        self.get_logger().info("Démarrage Nœud Double Caméra (V4L2 Hack + THREADS + Compression)")
 
         # --- Initialisation Caméra 1 ---
         self.cap1 = self._init_camera(cam_index_1)
         if self.cap1:
-            # On publie directement sur un topic "compressed"
-            self.publisher_1 = self.create_publisher(CompressedImage, topic_name_1 + '/compressed', qos_profile_sensor_data)
-            self.timer1 = self.create_timer(0.033, self.publish_cam1, callback_group=self.callback_group)
+            self.publisher_1 = self.create_publisher(CompressedImage, topic_name_1 + '/compressed', 1)
+            # Remplacement du Timer par un Thread indépendant
+            self.thread1 = threading.Thread(target=self._capture_loop, args=(self.cap1, self.publisher_1, "cam1"), daemon=True)
+            self.thread1.start()
 
         # --- Initialisation Caméra 2 ---
         self.cap2 = self._init_camera(cam_index_2)
         if self.cap2:
-            self.publisher_2 = self.create_publisher(CompressedImage, topic_name_2 + '/compressed', qos_profile_sensor_data)
-            self.timer2 = self.create_timer(0.033, self.publish_cam2, callback_group=self.callback_group)
+            self.publisher_2 = self.create_publisher(CompressedImage, topic_name_2 + '/compressed', 1)
+            # Remplacement du Timer par un Thread indépendant
+            self.thread2 = threading.Thread(target=self._capture_loop, args=(self.cap2, self.publisher_2, "cam2"), daemon=True)
+            self.thread2.start()
 
     def _init_camera(self, index):
         video_path = f"/dev/video{index}"
         
         # 1. LE HACK V4L2 (Sauve la bande passante USB de la Pi)
-        # On force le matériel en MJPEG *avant* qu'OpenCV ne touche à la caméra
         try:
             cmd = ["v4l2-ctl", "-d", video_path, "-v", "pixelformat=MJPG,width=640,height=480"]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -60,45 +58,39 @@ class TwoCameraNode(Node):
         cap = cv2.VideoCapture(video_path, cv2.CAP_V4L2)
         
         if cap.isOpened():
-            # On confirme à OpenCV qu'on veut du MJPG et la bonne résolution
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
             cap.set(cv2.CAP_PROP_FOURCC, fourcc)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Évite l'accumulation de vieilles images
             
             return cap
         else:
             self.get_logger().error(f"ECHEC : Impossible d'ouvrir {video_path}")
             return None
 
-    def publish_cam1(self):
-        self._publish_single_frame(self.cap1, self.publisher_1, "cam1")
+    def _capture_loop(self, cap, publisher, frame_id):
+        # Cette boucle tourne à l'infini dans son propre thread, sans ralentir ROS 2 !
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+        
+        while rclpy.ok() and cap.isOpened():
+            ret, frame = cap.read() # Cette ligne bloque uniquement ce thread
+            if not ret:
+                continue
 
-    def publish_cam2(self):
-        self._publish_single_frame(self.cap2, self.publisher_2, "cam2")
-
-    def _publish_single_frame(self, cap, publisher, frame_id):
-        ret, frame = cap.read()
-        if not ret:
-            self.get_logger().warning(f"Erreur lecture frame {frame_id}", throttle_duration_sec=5.0)
-            return
-
-        try:
-            # 2. LA COMPRESSION ROS 2 (Sauve la bande passante Wi-Fi)
-            # On compresse l'image en JPEG (qualité 80%) pour l'envoi réseau
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-            result, encoded_image = cv2.imencode('.jpg', frame, encode_param)
-            
-            if result:
-                msg = CompressedImage()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = frame_id
-                msg.format = "jpeg"
-                msg.data = np.array(encoded_image).tobytes()
-                publisher.publish(msg)
-        except Exception as e:
-            self.get_logger().error(f"Erreur publication {frame_id}: {e}")
+            try:
+                # Compression ROS 2 (Sauve la bande passante Wi-Fi)
+                result, encoded_image = cv2.imencode('.jpg', frame, encode_param)
+                
+                if result:
+                    msg = CompressedImage()
+                    msg.header.stamp = self.get_clock().now().to_msg()
+                    msg.header.frame_id = frame_id
+                    msg.format = "jpeg"
+                    msg.data = np.array(encoded_image).tobytes()
+                    publisher.publish(msg)
+            except Exception as e:
+                pass # Évite de spammer les logs
 
     def destroy_node(self):
         self.get_logger().info("Arrêt du nœud, libération des caméras...")
@@ -108,15 +100,13 @@ class TwoCameraNode(Node):
             self.cap2.release()
         super().destroy_node()
 
-
 def main(args=None):
     rclpy.init(args=args)
     node = TwoCameraNode()
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
     
+    # Plus besoin de MultiThreadedExecutor, les threads Python gèrent la charge.
     try:
-        executor.spin()
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:

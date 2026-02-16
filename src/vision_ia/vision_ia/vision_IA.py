@@ -2,11 +2,11 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
+from sensor_msgs.msg import CompressedImage # <--- Changement ici
 from ultralytics import YOLO
 import cv2
 import torch
+import numpy as np # <--- Nécessaire pour décoder le JPEG
 
 MODEL_PATH = "yolov8n.pt"
 CONF_THRESHOLD = 0.5
@@ -17,8 +17,6 @@ SHOW_WINDOW = True
 class VisionIA(Node):
     def __init__(self):
         super().__init__('vision_IA_node')
-
-        self.bridge = CvBridge()
 
         self.get_logger().info("🔄 Chargement du modèle YOLOv8...")
         self.model = YOLO(MODEL_PATH)
@@ -32,25 +30,34 @@ class VisionIA(Node):
 
         self.window_created = False
 
-        # Souscription aux images
+        # 1. Souscription au topic COMPRESSÉ
         self.subscription = self.create_subscription(
-            Image,
-            '/video_cam',
+            CompressedImage,
+            '/video_cam/compressed', # <--- On écoute le nouveau flux
             self.image_callback,
             10
         )
 
-        # Publication des coordonnées et du flux annoté
+        # 2. Publication (Positions + Flux COMPRESSÉ)
         self.publisher_ = self.create_publisher(Float32MultiArray, '/position_personne', 10)
-        self.result_publisher = self.create_publisher(Image, '/video_result', 10)
+        
+        # On publie le résultat en compressé pour ne pas tuer le Wi-Fi vers Foxglove !
+        self.result_publisher = self.create_publisher(CompressedImage, '/video_result/compressed', 10)
 
-        self.get_logger().info("✅ Nœud YOLO prêt !")
+        self.get_logger().info("✅ Nœud YOLO prêt (Compatible CompressedImage) !")
 
     def image_callback(self, msg):
-        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        # --------- DÉCODAGE DU FLUX COMPRESSÉ ---------
+        np_arr = np.frombuffer(msg.data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        
+        if frame is None:
+            self.get_logger().warning("Erreur de décodage de l'image.")
+            return
+
         orig_frame = frame.copy()
 
-        # --------- YOLO DETECTION (tous objets) ---------
+        # --------- YOLO DETECTION ---------
         results = self.model(frame)[0]
 
         positions = Float32MultiArray()
@@ -64,10 +71,10 @@ class VisionIA(Node):
 
             x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
 
-            # Ajouter les coordonnées au message Float32MultiArray
+            # Ajouter les coordonnées
             positions.data.extend([x1, y1, x2, y2])
 
-            # Dessiner les boîtes et labels
+            # Dessiner les boîtes
             cv2.rectangle(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(
                 orig_frame,
@@ -80,13 +87,21 @@ class VisionIA(Node):
             )
 
         # Publier les coordonnées
-        self.publisher_.publish(positions)
+        if len(positions.data) > 0:
+            self.publisher_.publish(positions)
 
-        # Publier l'image annotée
-        img_msg = self.bridge.cv2_to_imgmsg(orig_frame, encoding='bgr8')
-        self.result_publisher.publish(img_msg)
+        # --------- ENCODAGE ET PUBLICATION DU RÉSULTAT ---------
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+        result, encoded_image = cv2.imencode('.jpg', orig_frame, encode_param)
+        
+        if result:
+            msg_out = CompressedImage()
+            msg_out.header = msg.header # On garde le même timestamp
+            msg_out.format = "jpeg"
+            msg_out.data = np.array(encoded_image).tobytes()
+            self.result_publisher.publish(msg_out)
 
-        # Affichage OpenCV
+        # --------- AFFICHAGE LOCAL OPENCV ---------
         if SHOW_WINDOW:
             if not self.window_created:
                 cv2.namedWindow("Détection Objets - YOLO", cv2.WINDOW_NORMAL)
