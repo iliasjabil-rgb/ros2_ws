@@ -23,10 +23,9 @@ setup(
     maintainer_email='user@todo.todo',
     description='Controle teleop URDF sysmap',
     license='TODO',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # MODIFICATION ICI (sysmap_package.manipulator_teleop) :
+            'robot_brain = sysmap_package.robot_brain:main',
             'sysmap_teleop = sysmap_package.manipulator_teleop:main',
             'sysmap_joystick = sysmap_package.sysmap_joystick:main',
             'simple_servo3 = sysmap_package.simple_servo3_test:main',

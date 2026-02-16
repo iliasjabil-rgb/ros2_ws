@@ -38,14 +38,14 @@ def generate_launch_description():
         ),
         Node(
             package=pkg_name, # Utilise la variable sysmap_package
-            executable='sysmap_teleop',
-            name='sysmap_teleop',
+            executable='sysmap_joystick',
+            name='sysmap_joystick',
             output='screen'
         ),
         Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
+            package=pkg_name,      # <--- C'EST ICI QUE ÇA CHANGE
+            executable='robot_brain',
+            name='robot_brain',
             output='screen'
-        )
+        ),
     ])

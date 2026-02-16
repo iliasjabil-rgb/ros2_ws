@@ -32,5 +32,5 @@ setup(
                 'camera = vision_ia.camera:main',
             ],
         },
-
+    
 )
