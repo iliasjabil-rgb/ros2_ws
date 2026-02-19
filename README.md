@@ -51,8 +51,7 @@ graph LR
 
     MEGA <==>|USB ttyACM0 - 10Hz| PC
     UNO <==>|USB ttyACM1 - 4Hz| PC
-
-    📖 Dictionnaire d'API (Communication JSON)
+📖 Dictionnaire d'API (Communication JSON)
 L'entièreté de la communication entre ROS 2 et les Arduinos se fait via des chaînes JSON terminées par un retour à la ligne (\n).
 
 1. Arduino MEGA (Mouvement & Sécurité)
@@ -105,12 +104,3 @@ ros2 run dual_serial_bridge mega_driver
 
 # Terminal 2 : Lancer le driver Uno
 ros2 run dual_serial_bridge uno_driver
-
-### Comment mettre à jour GitHub :
-
-1. Remplacez le contenu de votre fichier local par ce nouveau texte.
-2. Tapez ces commandes dans le terminal :
-   ```bash
-   git add README.md
-   git commit -m "Correction Mermaid et ajout du dictionnaire d'API JSON"
-   git push
