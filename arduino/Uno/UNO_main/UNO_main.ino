@@ -1,88 +1,104 @@
-//#include <Arduino_RouterBridge.h>  // inutile sur UNO R3
-//#define Serial Monitor              // surtout PAS ça sur UNO R3
+/**
+ * ============================================================================
+ * FICHIER : UNO_main.ino (V3 - Clean)
+ * ROLE    : Programme principal de l'Arduino Uno.
+ * - Gestion des actionneurs secondaires (Servos, Relais, LED)
+ * - Lecture des capteurs I2C (IMU, Température, Distance ToF)
+ * - Parsing JSON "manuel" optimisé pour économiser la RAM de la Uno.
+ * ============================================================================
+ */
 
 #include <Wire.h>
 #include <Servo.h>
-
-#include "pins_uno.h"
-#include "protocol.h"
-
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_LSM9DS1.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_MCP9808.h>
 #include <VL53L0X.h>
 
-// En haut du fichier
+#include "pins_uno.h"
+#include "protocol.h"
+
+/**
+ * ============================================================================
+ * CONFIGURATION MATÉRIELLE (Drapeaux d'activation)
+ * ============================================================================
+ */
 #define USE_IMU      1
 #define USE_MCP9808  1
 #define USE_VL53L0X  1
 
+const uint32_t TELEMETRY_INTERVAL_MS = 250; // Télémétrie à 4 Hz
+const uint16_t LED_EFFECT_PERIOD_MS  = 15;  // Vitesse de l'effet SRS
 
-// -------------------- LED RGB (ruban) --------------------
+/**
+ * ============================================================================
+ * VARIABLES GLOBALES ET OBJETS
+ * ============================================================================
+ */
+// --- Ruban LED RGB ---
 #define LED_COUNT UNO_001LED_COUNT
 Adafruit_NeoPixel strip(LED_COUNT, UNO_001LED_PIN, NEO_GRB + NEO_KHZ800);
 
-// -------------------- Capteurs I2C --------------------
+// --- Capteurs I2C ---
 Adafruit_LSM9DS1 imu = Adafruit_LSM9DS1();
 Adafruit_MCP9808 mcp9808 = Adafruit_MCP9808();
 VL53L0X tof;
 
-// -------------------- Globales --------------------
+// --- Actionneurs et Communication ---
 Servo servo1, servo2, servo3, servo4;
-String rx;
+String rx; // Buffer de réception série
 
+// --- États du système ---
 bool imu_ok = false;
 bool mcp_ok = false;
 bool tof_ok = false;
-bool led_effect_enabled = false;             // effet SRS actif ou non
+
+// --- Gestion de l'effet visuel SRS ---
+bool led_effect_enabled = false;
 uint32_t last_led_effect_ms = 0;
-const uint16_t LED_EFFECT_PERIOD_MS = 15;    // équivalent à delay(15) mais non bloquant
 
 
-// -------------------- Helpers sorties --------------------
-void digitalSafeWrite(uint8_t pin, int level) {
+/**
+ * ============================================================================
+ * FONCTIONS UTILITAIRES (HELPERS)
+ * ============================================================================
+ */
+
+// Écrit proprement sur une sortie digitale si la broche est valide
+void digitalSafeWrite(int8_t pin, int level) {
   if (pin >= 0) {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, level);
   }
 }
 
-void pwmSafeWrite(uint8_t pin, int pwm) {
-  if (pin >= 0) {
-    pinMode(pin, OUTPUT);
-    analogWrite(pin, constrain(pwm, 0, 255));
-  }
-}
-
+// Génère l'animation visuelle aléatoire (Effet SRS) de façon non-bloquante
 void updateLedEffect(uint32_t now_ms) {
-  if (!led_effect_enabled) return;  // effet désactivé -> on ne fait rien
+  if (!led_effect_enabled) return; 
 
   if (now_ms - last_led_effect_ms < LED_EFFECT_PERIOD_MS) {
-    return; // pas encore temps de faire une nouvelle itération
+    return; // Temporisation non atteinte
   }
   last_led_effect_ms = now_ms;
 
-  // --- Étape 1 : éteindre quelques LEDs au hasard ---
+  // Étape 1 : Éteindre 5 LEDs au hasard
   for (int k = 0; k < 5; k++) {
     int pixelEteint = random(LED_COUNT);
-    strip.setPixelColor(pixelEteint, strip.Color(0, 0, 0));
+    strip.setPixelColor(pixelEteint, 0, 0, 0); // Noir
   }
 
-  // --- Étape 2 : allumer une LED avec une couleur SRS aléatoire ---
+  // Étape 2 : Allumer 1 LED avec une couleur aléatoire de la charte SRS
   int pixelAllume  = random(LED_COUNT);
-  int choixCouleur = random(3);  // 0,1,2
+  int choixCouleur = random(3); 
 
   uint8_t r = 0, g = 0, b = 0;
   if (choixCouleur == 0) {
-    // Jaune
-    r = 255; g = 255; b = 0;
+    r = 255; g = 255; b = 0;   // Jaune
   } else if (choixCouleur == 1) {
-    // Blanc
-    r = 255; g = 255; b = 255;
+    r = 255; g = 255; b = 255; // Blanc
   } else {
-    // Bleu foncé
-    r = 0; g = 0; b = 255;
+    r = 0;   g = 0;   b = 255; // Bleu foncé
   }
 
   strip.setPixelColor(pixelAllume, strip.Color(r, g, b));
@@ -90,17 +106,20 @@ void updateLedEffect(uint32_t now_ms) {
 }
 
 
-// -------------------- SETUP --------------------
+/**
+ * ============================================================================
+ * SETUP : INITIALISATION
+ * ============================================================================
+ */
 void setup() {
   Serial.begin(115200);          
-  
   send_json(F("{\"src\":\"uno\",\"event\":\"BOOT_UNO_MAIN_DEBUT\"}"));
-  // I2C
+  
+  // --- Initialisation I2C Haut Débit ---
   Wire.begin();
-  Wire.setClock(400000);
-  //Serial.println(F("APRES_WIRE"));
+  Wire.setClock(400000); 
+
 #if USE_IMU
-  // ----- IMU LSM9DS1 -----
   if (!imu.begin()) {
     imu_ok = false;
     send_json(F("{\"src\":\"uno\",\"event\":\"imu_init_failed\"}"));
@@ -114,11 +133,10 @@ void setup() {
 #endif
 
 #if USE_MCP9808
-  // ----- Température MCP9808 (adresse mesurée : 0x1F) -----
-  if (mcp9808.begin(0x1F)) {
+  if (mcp9808.begin(0x1F)) { // Adresse par défaut
     mcp_ok = true;
     mcp9808.setResolution(3);
-    send_json(F("{\"src\":\"uno\",\"event\":\"mcp9808_temp__ok\"}"));
+    send_json(F("{\"src\":\"uno\",\"event\":\"mcp9808_temp_ok\"}"));
   } else {
     mcp_ok = false;
     send_json(F("{\"src\":\"uno\",\"event\":\"mcp9808_temp_init_failed\"}"));
@@ -126,7 +144,6 @@ void setup() {
 #endif
 
 #if USE_VL53L0X
-  // ----- Distance VL53L0X -----
   if (tof.init()) {
     tof.setTimeout(50);
     tof_ok = true;
@@ -136,7 +153,8 @@ void setup() {
     send_json(F("{\"src\":\"uno\",\"event\":\"vl53l0x_dist_init_failed\"}"));
   }
 #endif
-  // ----- Sorties relais / EV -----
+
+  // --- Initialisation Relais (Toutes charges coupées par défaut) ---
   digitalSafeWrite(UNO_001XR_PIN, LOW);
   digitalSafeWrite(UNO_002XR_PIN, LOW);
   digitalSafeWrite(UNO_003XR_PIN, LOW);
@@ -144,61 +162,58 @@ void setup() {
   digitalSafeWrite(UNO_005XR_PIN, LOW);
   digitalSafeWrite(UNO_006XR_PIN, LOW);
 
-  // ----- Servos -----
-if (UNO_001SV_PIN>=0) { servo1.attach(UNO_001SV_PIN, 500, 2500); servo1.write(90); }
-if (UNO_002SV_PIN>=0) { servo2.attach(UNO_002SV_PIN, 500, 2500); servo2.write(90); }
-if (UNO_003SV_PIN>=0) { servo3.attach(UNO_003SV_PIN, 500, 2500); servo3.write(89); }
-if (UNO_004SV_PIN>=0) { servo4.attach(UNO_004SV_PIN, 500, 2500); servo4.write(89); }
+  // --- Initialisation Servos ---
+  if (UNO_001SV_PIN >= 0) { servo1.attach(UNO_001SV_PIN, 500, 2500); servo1.write(90); }
+  if (UNO_002SV_PIN >= 0) { servo2.attach(UNO_002SV_PIN, 500, 2500); servo2.write(90); }
+  if (UNO_003SV_PIN >= 0) { servo3.attach(UNO_003SV_PIN, 500, 2500); servo3.write(89); }
+  if (UNO_004SV_PIN >= 0) { servo4.attach(UNO_004SV_PIN, 500, 2500); servo4.write(89); }
 
-
-  // ----- Ruban LED -----
+  // --- Initialisation Ruban LED ---
   if (UNO_001LED_PIN >= 0) {
     strip.begin();
-    strip.setBrightness(127);  // moyen par défaut
-    strip.show();  // tout éteint
+    strip.setBrightness(127);
+    strip.show(); 
   }
-  send_json(F("{\"src\":\"uno\",\"event\":\"SETUP_FIN\"}"));
 
-  send_json(String("{\"board\":\"") + UNO_BOARD_ID +
-            "\",\"fw\":\"" + UNO_FW_VERSION + "\",\"event\":\"boot\"}");
+  send_json(String("{\"board\":\"") + UNO_BOARD_ID + "\",\"fw\":\"" + UNO_FW_VERSION + "\",\"event\":\"boot_ready\"}");
 }
 
-// -------------------- Commandes JSON --------------------
+
+/**
+ * ============================================================================
+ * FONCTION : PARSING DES COMMANDES (Optimisé RAM)
+ * ============================================================================
+ */
 void handleCmd(const String& line) {
 
-  // ----- Commande servos -----
-if (line.indexOf("\"cmd\":\"servo\"")>=0) {
-  int id = 1;
-  int ang = 90;
-  int p;
+  // ----------------------------------------------------------------
+  // COMMANDE : SERVO
+  // ----------------------------------------------------------------
+  if (line.indexOf("\"cmd\":\"servo\"") >= 0) {
+    int id = 1, ang = 90, p;
 
-  p = line.indexOf("\"id\":");
-  if (p >= 0) id = line.substring(p + 5).toInt();
+    p = line.indexOf("\"id\":");    if (p >= 0) id = line.substring(p + 5).toInt();
+    p = line.indexOf("\"angle\":"); if (p >= 0) ang = line.substring(p + 8).toInt();
 
-  p = line.indexOf("\"angle\":");
-  if (p >= 0) ang = line.substring(p + 8).toInt();
+    int cmd_angle = ang;
 
-  int cmd_angle = ang;
+    // Servos 1 & 2 : Positionnement classique (0-180)
+    // Servos 3 & 4 : Rotation continue (90 = stop absolu, selon étalonnage)
+    cmd_angle = constrain(ang, 0, 180);
 
-  if (id == 1 || id == 2) {
-    cmd_angle = constrain(ang, 0, 180);   // servos position
-  } else if (id == 3 || id == 4) {
-    cmd_angle = constrain(ang, 0, 180);   // servos continus, 177 = stop
+    if      (id == 1 && UNO_001SV_PIN >= 0) servo1.write(cmd_angle);
+    else if (id == 2 && UNO_002SV_PIN >= 0) servo2.write(cmd_angle);
+    else if (id == 3 && UNO_003SV_PIN >= 0) servo3.write(cmd_angle);
+    else if (id == 4 && UNO_004SV_PIN >= 0) servo4.write(cmd_angle);
+
+    send_json(String("{\"src\":\"uno\",\"event\":\"servo\",\"id\":") + id + ",\"angle_cmd\":" + cmd_angle + "}");
   }
 
-  if (id == 1 && UNO_001SV_PIN >= 0)      servo1.write(cmd_angle);
-  else if (id == 2 && UNO_002SV_PIN >= 0) servo2.write(cmd_angle);
-  else if (id == 3 && UNO_003SV_PIN >= 0) servo3.write(cmd_angle);
-  else if (id == 4 && UNO_004SV_PIN >= 0) servo4.write(cmd_angle);
-
-  send_json(String("{\"src\":\"uno\",\"event\":\"servo\",\"id\":") +
-            id + ",\"angle_cmd\":" + cmd_angle + "}");
-}
-
-
+  // ----------------------------------------------------------------
+  // COMMANDE : RELAY
+  // ----------------------------------------------------------------
   else if (line.indexOf("\"cmd\":\"relay\"") >= 0) {
-    int id = 1, st = 0;
-    int p;
+    int id = 1, st = 0, p;
 
     p = line.indexOf("\"id\":");    if (p >= 0) id = line.substring(p + 5).toInt();
     p = line.indexOf("\"state\":"); if (p >= 0) st = line.substring(p + 8).toInt();
@@ -211,71 +226,62 @@ if (line.indexOf("\"cmd\":\"servo\"")>=0) {
                   (id == 6) ? UNO_006XR_PIN : 0;
 
     digitalSafeWrite(pin, st ? HIGH : LOW);
-
-    send_json(String("{\"src\":\"uno\",\"event\":\"relay\",\"id\":") +
-              id + ",\"state\":" + st + "}");
+    send_json(String("{\"src\":\"uno\",\"event\":\"relay\",\"id\":") + id + ",\"state\":" + st + "}");
   }
 
-
+  // ----------------------------------------------------------------
+  // COMMANDE : LED (Couleur Fixe)
+  // ----------------------------------------------------------------
   else if (line.indexOf("\"cmd\":\"led\"") >= 0) {
-    int r = 255, g = 255, b = 255, a = 255; // a = luminosité par défaut (max)
-    int p;
+    int r = 255, g = 255, b = 255, a = 255, p;
 
     p = line.indexOf("\"r\":"); if (p >= 0) r = line.substring(p + 4).toInt();
     p = line.indexOf("\"g\":"); if (p >= 0) g = line.substring(p + 4).toInt();
     p = line.indexOf("\"b\":"); if (p >= 0) b = line.substring(p + 4).toInt();
-    p = line.indexOf("\"a\":"); if (p >= 0) a = line.substring(p + 4).toInt();
+    p = line.indexOf("\"a\":"); if (p >= 0) a = line.substring(p + 4).toInt(); // Luminosité
 
-    r = constrain(r, 0, 255);
-    g = constrain(g, 0, 255);
-    b = constrain(b, 0, 255);
-    a = constrain(a, 0, 255);  // 0 = éteint, 255 = plein pot
+    r = constrain(r, 0, 255); g = constrain(g, 0, 255);
+    b = constrain(b, 0, 255); a = constrain(a, 0, 255);
 
-        if (UNO_001LED_PIN >= 0) {
-      // Un ordre LED “statique” coupe l’effet scintillant
-      led_effect_enabled = false;
-
-      strip.setBrightness(a);        // luminosité globale
-      for (int i = 0; i < LED_COUNT; i++) {
-        strip.setPixelColor(i, strip.Color(r, g, b));
-      }
+    if (UNO_001LED_PIN >= 0) {
+      led_effect_enabled = false; // Un ordre statique coupe l'animation SRS
+      strip.setBrightness(a); 
+      for (int i = 0; i < LED_COUNT; i++) strip.setPixelColor(i, strip.Color(r, g, b));
       strip.show();
     }
-
-
-    send_json(String("{\"src\":\"uno\",\"event\":\"led\",\"r\":") +
-              r + ",\"g\":" + g + ",\"b\":" + b + ",\"a\":" + a + "}");
+    send_json(String("{\"src\":\"uno\",\"event\":\"led\",\"r\":") + r + ",\"g\":" + g + ",\"b\":" + b + ",\"a\":" + a + "}");
   }
-    else if (line.indexOf("\"cmd\":\"led_effect\"") >= 0) {
-    int st = 0;
-    int p = line.indexOf("\"state\":");
-    if (p >= 0) {
-      st = line.substring(p + 8).toInt();
-    }
+
+  // ----------------------------------------------------------------
+  // COMMANDE : LED_EFFECT (Animation SRS)
+  // ----------------------------------------------------------------
+  else if (line.indexOf("\"cmd\":\"led_effect\"") >= 0) {
+    int st = 0, p;
+    
+    p = line.indexOf("\"state\":"); 
+    if (p >= 0) st = line.substring(p + 8).toInt();
 
     led_effect_enabled = (st != 0);
 
     if (led_effect_enabled) {
-      // --- CORRECTION 1 : On force la luminosité au max ---
-      // Sinon, si l'intensité était à 0 avant, l'effet est invisible !
-      strip.setBrightness(255); 
+      strip.setBrightness(255); // Force la luminosité max pour l'effet
     } else {
-      // Quand on coupe l'effet, on éteint tout proprement
-      for (int i = 0; i < LED_COUNT; i++) {
-        strip.setPixelColor(i, 0);
-      }
-      strip.show();
+      for (int i = 0; i < LED_COUNT; i++) strip.setPixelColor(i, 0);
+      strip.show(); // Extinction propre
     }
-
-    send_json(String("{\"src\":\"uno\",\"event\":\"led_effect\",\"state\":") +
-              st + "}");
+    send_json(String("{\"src\":\"uno\",\"event\":\"led_effect\",\"state\":") + st + "}");
   }
-
 }
 
-// -------------------- LOOP --------------------
+
+/**
+ * ============================================================================
+ * BOUCLE PRINCIPALE
+ * ============================================================================
+ */
 void loop() {
-  // Lecture des commandes (si tu tapes quelque chose dans le moniteur série)
+  
+  // --- 1. Lecture asynchrone du port Série ---
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\n') {
@@ -286,87 +292,66 @@ void loop() {
     }
   }
   
-  // Télémétrie toutes les 250 ms
+  // --- 2. Télémétrie périodique ---
   static uint32_t t0 = 0;
   uint32_t ms = millis();
 
-  if (ms - t0 > 250) {
+  if (ms - t0 > TELEMETRY_INTERVAL_MS) {
     t0 = ms;
 
-    // DEBUG pour vérifier que le loop tourne bien
-    //Serial.println(F("LOOP_TICK"));
-
-    // --- IMU ---
+    // Variables par défaut
     float ax = 0.0f, ay = 0.0f, az = 0.0f;
     float gx = 0.0f, gy = 0.0f, gz = 0.0f;
     float mx = 0.0f, my = 0.0f, mz = 0.0f;
+    float temp_c = 0.0f;
+    uint16_t dist_mm = 0;
 
+    // Lecture IMU
     if (imu_ok) {
       sensors_event_t a_event, g_event, m_event, temp_event;
       imu.getEvent(&a_event, &g_event, &m_event, &temp_event);
 
-      ax = a_event.acceleration.x;
-      ay = a_event.acceleration.y;
-      az = a_event.acceleration.z;
-
-      gx = g_event.gyro.x;
-      gy = g_event.gyro.y;
-      gz = g_event.gyro.z;
-
-      mx = m_event.magnetic.x; 
-      my = m_event.magnetic.y;
-      mz = m_event.magnetic.z;
+      ax = a_event.acceleration.x; ay = a_event.acceleration.y; az = a_event.acceleration.z;
+      gx = g_event.gyro.x;         gy = g_event.gyro.y;         gz = g_event.gyro.z;
+      mx = m_event.magnetic.x;     my = m_event.magnetic.y;     mz = m_event.magnetic.z;
     }
 
-    // --- Température ---
-    float temp_c = 0.0f;
-    if (mcp_ok) {
-      temp_c = mcp9808.readTempC();
-    }
+    // Lecture Température
+    if (mcp_ok) temp_c = mcp9808.readTempC();
 
-    // --- Distance ---
-    uint16_t dist_mm = 0;
+    // Lecture ToF (Laser)
     if (tof_ok) {
       dist_mm = tof.readRangeSingleMillimeters();
-      if (tof.timeoutOccurred()) {
-        send_json(F("{\"src\":\"uno\",\"event\":\"VL53_dist_TIMEOUT\"}"));
-      }
+      if (tof.timeoutOccurred()) send_json(F("{\"src\":\"uno\",\"event\":\"VL53_dist_TIMEOUT\"}"));
     }
 
-// JSON télémétrie, construit "à la main" pour éviter les gros String
-Serial.print(F("{\"src\":\"uno\""));
+    // ------------------------------------------------------------------
+    // FORMATAGE MANUEL DU JSON (Évite d'exploser la RAM avec un String)
+    // ------------------------------------------------------------------
+    Serial.print(F("{\"src\":\"uno\""));
 
-// États capteurs
-Serial.print(F(",\"imu_ok\":"));  Serial.print(imu_ok ? 1 : 0);
-Serial.print(F(",\"mcp_ok\":"));  Serial.print(mcp_ok ? 1 : 0);
-Serial.print(F(",\"tof_ok\":"));  Serial.print(tof_ok ? 1 : 0);
+    Serial.print(F(",\"imu_ok\":")); Serial.print(imu_ok ? 1 : 0);
+    Serial.print(F(",\"mcp_ok\":")); Serial.print(mcp_ok ? 1 : 0);
+    Serial.print(F(",\"tof_ok\":")); Serial.print(tof_ok ? 1 : 0);
 
-// Température + distance
-Serial.print(F(",\"temp_c\":"));  Serial.print(temp_c, 2);
-Serial.print(F(",\"dist_mm\":")); Serial.print(dist_mm);
+    Serial.print(F(",\"temp_c\":"));  Serial.print(temp_c, 2);
+    Serial.print(F(",\"dist_mm\":")); Serial.print(dist_mm);
 
-// IMU linéaire
-Serial.print(F(",\"ax\":"));      Serial.print(ax, 3);
-Serial.print(F(",\"ay\":"));      Serial.print(ay, 3);
-Serial.print(F(",\"az\":"));      Serial.print(az, 3);
+    Serial.print(F(",\"ax\":")); Serial.print(ax, 3);
+    Serial.print(F(",\"ay\":")); Serial.print(ay, 3);
+    Serial.print(F(",\"az\":")); Serial.print(az, 3);
 
-// IMU gyro
-Serial.print(F(",\"gx\":"));      Serial.print(gx, 3);
-Serial.print(F(",\"gy\":"));      Serial.print(gy, 3);
-Serial.print(F(",\"gz\":"));      Serial.print(gz, 3);
+    Serial.print(F(",\"gx\":")); Serial.print(gx, 3);
+    Serial.print(F(",\"gy\":")); Serial.print(gy, 3);
+    Serial.print(F(",\"gz\":")); Serial.print(gz, 3);
 
-// (optionnel) champ magnétique
-Serial.print(F(",\"mx\":"));      Serial.print(mx, 3);
-Serial.print(F(",\"my\":"));      Serial.print(my, 3);
-Serial.print(F(",\"mz\":"));      Serial.print(mz, 3);
+    Serial.print(F(",\"mx\":")); Serial.print(mx, 3);
+    Serial.print(F(",\"my\":")); Serial.print(my, 3);
+    Serial.print(F(",\"mz\":")); Serial.print(mz, 3);
 
-
-
-// Fin de l’objet JSON
-Serial.println('}');
-
-
+    Serial.println('}'); // Clôture le JSON
   }
-    // Mise à jour non bloquante de l’animation SRS
+
+  // --- 3. Mise à jour de l'animation LED (Non-bloquant) ---
   updateLedEffect(ms);
 }
