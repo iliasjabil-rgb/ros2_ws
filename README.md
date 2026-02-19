@@ -28,7 +28,7 @@ graph LR
         ALM["3x Retours Alarme Drivers"]:::hw
         
         MEGA -->|STEP/DIR| Drv
-        Drv ===|Puissance| Mot
+        Drv ==>|Puissance| Mot
         FinsCourse -.->|Pullup LOW| MEGA
         INA -.->|Bus I2C| MEGA
         ALM -.->|Interrupt| MEGA
@@ -45,9 +45,9 @@ graph LR
         
         Capteurs -.->|Bus I2C| UNO
         UNO -->|PWM| Servos
-        UNO -->|Digital LOW/HIGH| Relais
+        UNO -->|Digital HIGH/LOW| Relais
         UNO -->|Data 800kHz| LED
     end
 
-    MEGA <==>|USB ttyACM0\n10Hz Télémétrie| PC
-    UNO <==>|USB ttyACM1\n4Hz Télémétrie| PC
+    MEGA <==>|USB ttyACM0 - 10Hz| PC
+    UNO <==>|USB ttyACM1 - 4Hz| PC
