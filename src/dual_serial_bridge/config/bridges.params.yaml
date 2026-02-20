@@ -9,5 +9,5 @@ mega_bridge:
 
 uno_bridge:
   ros__parameters:
-    port: "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_4423831383835151A2D1-if00"
+    port: "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_03536383236351C09382-if00"
     baud: 115200
