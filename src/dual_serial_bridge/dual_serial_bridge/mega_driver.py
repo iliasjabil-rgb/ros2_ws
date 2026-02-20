@@ -1,121 +1,130 @@
 #!/usr/bin/env python3
-import json
 import rclpy
 from rclpy.node import Node
-<<<<<<< HEAD
-# IMPORT CORRECT : On a besoin de ces types
-=======
->>>>>>> 9a6e3af0 (MAJ camera et driver mega pour cap courant)
-from std_msgs.msg import String, Int32MultiArray, Float32MultiArray, Bool
+import serial
+import json
+import threading
+
+# Importation des types de messages standards ROS 2
+from std_msgs.msg import String, Int32MultiArray, Float32MultiArray
 
 class MegaDriver(Node):
     def __init__(self):
         super().__init__('mega_driver')
-
-        # --- Publishers Télémétrie ---
-        self.pub_pos    = self.create_publisher(Int32MultiArray,   'mega/pos',    10)
-        self.pub_limits = self.create_publisher(Int32MultiArray,   'mega/limits', 10)
-        self.pub_events = self.create_publisher(String,            'mega/events', 10)
-<<<<<<< HEAD
-        # Publisher pour le voyant Foxglove
-        self.pub_status = self.create_publisher(Bool,              'status/mega', 10)
         
-        # Gestion du temps pour le Watchdog
-        self.last_msg_time = self.get_clock().now()
-        self.create_timer(1.0, self.check_connection)
-=======
-        self.pub_status = self.create_publisher(Bool,              'status/mega', 10)
->>>>>>> 9a6e3af0 (MAJ camera et driver mega pour cap courant)
-
-        # --- NOUVEAU : Publishers Puissance Séparés ---
-        # On garde 'mega/pwr' global pour le debug, et on ajoute les détaillés
-        self.pub_pwr_global = self.create_publisher(Float32MultiArray, 'mega/pwr', 10)
+        # --- PARAMÈTRES ---
+        self.declare_parameter('port', '/dev/ttyACM0') # À adapter selon votre port
+        self.declare_parameter('baudrate', 115200)
         
-        self.pub_pwr_m1 = self.create_publisher(Float32MultiArray, 'mega/pwr/m1', 10)
-        self.pub_pwr_m2 = self.create_publisher(Float32MultiArray, 'mega/pwr/m2', 10)
-        self.pub_pwr_m3 = self.create_publisher(Float32MultiArray, 'mega/pwr/m3', 10)
-        self.pub_pwr_m4 = self.create_publisher(Float32MultiArray, 'mega/pwr/m4', 10)
+        port = self.get_parameter('port').value
+        baudrate = self.get_parameter('baudrate').value
         
-        # Gestion du Watchdog
-        self.last_msg_time = self.get_clock().now()
-        self.create_timer(1.0, self.check_connection)
+        # --- CONNEXION SÉRIE ---
+        try:
+            self.ser = serial.Serial(port, baudrate, timeout=1.0)
+            self.get_logger().info(f"✅ Connecté à l'Arduino Mega sur {port} à {baudrate} bauds.")
+        except Exception as e:
+            self.get_logger().error(f"❌ Impossible d'ouvrir le port série: {e}")
+            raise SystemExit
+            
+        # --- PUBLISHERS (Télémétrie Mega -> ROS 2) ---
+        # mega/positions : [M1_pos, M2_pos, M3_pos, M4_pos]
+        self.pos_pub = self.create_publisher(Int32MultiArray, 'mega/positions', 10)
+        
+        # mega/power : [V1, I1, P1, V2, I2, P2, V3, I3, P3, V4, I4, P4]
+        self.pwr_pub = self.create_publisher(Float32MultiArray, 'mega/power', 10)
+        
+        # mega/limits : [M1_Min, M1_Max, M2_Min, M2_Max, M3_Min, M3_Max, M4_Min, M4_Max] (1 = touché)
+        self.lim_pub = self.create_publisher(Int32MultiArray, 'mega/limits', 10)
+        
+        # mega/alarms : [M1_Alm, M2_Alm, M3_Alm, M4_Alm] (1 = driver en erreur)
+        self.alm_pub = self.create_publisher(Int32MultiArray, 'mega/alarms', 10)
+        
+        # --- SUBSCRIBER (Commandes ROS 2 -> Mega) ---
+        # Reçoit du JSON brut sous forme de String (ex: '{"cmd":"move", "axis":1, "steps":100}')
+        self.sub_cmd = self.create_subscription(String, 'mega/command', self.cmd_callback, 10)
+        
+        # --- DÉMARRAGE DU THREAD DE LECTURE ---
+        self.is_running = True
+        self.thread = threading.Thread(target=self.read_serial, daemon=True)
+        self.thread.start()
 
-        # Subscriber (Entrée depuis le Bridge)
-        self.sub_raw = self.create_subscription(String, 'mega/raw', self.raw_cb, 10)
+    def cmd_callback(self, msg):
+        """Envoie les commandes reçues de ROS 2 vers l'Arduino via le port Série."""
+        if self.ser.is_open:
+            cmd_str = msg.data.strip() + '\n'
+            self.ser.write(cmd_str.encode('utf-8'))
+            self.get_logger().debug(f"Commande envoyée: {cmd_str.strip()}")
 
-<<<<<<< HEAD
-        self.get_logger().info('MEGA Driver démarré (JSON Parser).')
-    # Fonction qui vérifie la connexion chaque seconde
-    def check_connection(self):
-        # Calcul du temps écoulé depuis le dernier message reçu
-        elapsed = (self.get_clock().now() - self.last_msg_time).nanoseconds / 1e9
-        # Si moins de 3 secondes de silence -> Connecté (Vrai), sinon Déconnecté (Faux)
-=======
-        self.get_logger().info('MEGA Driver (4-Axes Power Edition) démarré.')
+    def read_serial(self):
+        """Boucle infinie lue dans un thread séparé pour ne pas bloquer ROS 2."""
+        while rclpy.ok() and self.ser.is_open and self.is_running:
+            try:
+                if self.ser.in_waiting > 0:
+                    line = self.ser.readline().decode('utf-8', errors='replace').strip()
+                    if line:
+                        self.process_json(line)
+            except Exception as e:
+                self.get_logger().warning(f"Erreur de lecture série: {e}")
 
-    def check_connection(self):
-        elapsed = (self.get_clock().now() - self.last_msg_time).nanoseconds / 1e9
->>>>>>> 9a6e3af0 (MAJ camera et driver mega pour cap courant)
-        is_connected = elapsed < 3.0
-        self.pub_status.publish(Bool(data=is_connected))
-
-    def raw_cb(self, msg: String):
-<<<<<<< HEAD
-        self.last_msg_time = self.get_clock().now()
-=======
-        # 1. Reset Watchdog
-        self.last_msg_time = self.get_clock().now()
-
-        # 2. Parsing JSON
->>>>>>> 9a6e3af0 (MAJ camera et driver mega pour cap courant)
-        line = msg.data
+    def process_json(self, line):
+        """Parse le JSON et publie sur les topics correspondants."""
         try:
             data = json.loads(line)
-        except json.JSONDecodeError:
-            return 
-
-        if data.get('src') != 'mega': return
-
-        # --- TRAITEMENT DES DONNÉES ---
-
-        # 1. Positions
-        if 'pos' in data and isinstance(data['pos'], list):
-            self.pub_pos.publish(Int32MultiArray(data=data['pos']))
-
-        # 2. Fins de course
-        elif 'mr' in data and isinstance(data['mr'], list):
-            self.pub_limits.publish(Int32MultiArray(data=data['mr']))
-
-        # 3. PUISSANCE (C'est ici que ça change !)
-        elif 'pwr' in data and isinstance(data['pwr'], list):
-            raw_list = data['pwr']
-            count = len(raw_list)
             
-            # Publie toujours la liste complète sur le topic global
-            self.pub_pwr_global.publish(Float32MultiArray(data=raw_list))
+            # On vérifie que le message vient bien de la Mega
+            if data.get("src") == "mega":
+                
+                # 1. POSITIONS MOTEURS
+                if "pos" in data:
+                    msg = Int32MultiArray()
+                    msg.data = [int(x) for x in data["pos"]]
+                    self.pos_pub.publish(msg)
+                    
+                # 2. CAPTEURS DE PUISSANCE (INA260)
+                if "pwr" in data:
+                    msg = Float32MultiArray()
+                    msg.data = [float(x) for x in data["pwr"]]
+                    self.pwr_pub.publish(msg)
+                    
+                # 3. FINS DE COURSE (Sécurité Min/Max)
+                if "mr" in data:
+                    msg = Int32MultiArray()
+                    msg.data = [int(x) for x in data["mr"]]
+                    self.lim_pub.publish(msg)
+                    
+                # 4. ALARMES DRIVERS (ALM)
+                if "alm" in data:
+                    msg = Int32MultiArray()
+                    msg.data = [int(x) for x in data["alm"]]
+                    self.alm_pub.publish(msg)
+                    
+                    # Log critique dans le terminal ROS 2 si un driver plante !
+                    if sum(msg.data) > 0:
+                        self.get_logger().error(f"⚠️ ALARME DRIVER DÉTECTÉE (M1..M4) : {msg.data}")
 
-            # Si on a bien 12 valeurs (4 capteurs x 3 valeurs)
-            if count >= 12:
-                # Moteur 1 (Index 0, 1, 2)
-                self.pub_pwr_m1.publish(Float32MultiArray(data=raw_list[0:3]))
-                # Moteur 2 (Index 3, 4, 5)
-                self.pub_pwr_m2.publish(Float32MultiArray(data=raw_list[3:6]))
-                # Moteur 3 (Index 6, 7, 8)
-                self.pub_pwr_m3.publish(Float32MultiArray(data=raw_list[6:9]))
-                # Moteur 4 (Index 9, 10, 11)
-                self.pub_pwr_m4.publish(Float32MultiArray(data=raw_list[9:12]))
+        except json.JSONDecodeError:
+            # On ignore silencieusement les lignes qui ne sont pas du JSON valide
+            pass
 
-        # 4. Événements
-        elif 'event' in data:
-            self.pub_events.publish(String(data=line))
+    def destroy_node(self):
+        """Ferme proprement le port série à l'arrêt du nœud."""
+        self.is_running = False
+        if self.ser.is_open:
+            self.ser.close()
+        super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)
     node = MegaDriver()
+    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        node.get_logger().info("Arrêt demandé par l'utilisateur.")
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
+
+if __name__ == '__main__':
+    main()

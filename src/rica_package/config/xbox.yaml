@@ -1,4 +1,4 @@
-teleop_twist_joy_node:
+teleop_node:
   ros__parameters:
     enable_button: 5
     enable_turbo_button: 7
