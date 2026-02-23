@@ -3,7 +3,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     # --- VOS PORTS USB PERSISTANTS ---
-    port_mega = '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_7513030393535130D120-if00'
+    port_mega = '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_03536383236351B0F2E1-if00'
     port_uno = '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_03536383236351C09382-if00'
 
     return LaunchDescription([
