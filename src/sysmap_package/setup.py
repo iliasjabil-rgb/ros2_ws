@@ -29,6 +29,7 @@ setup(
             'sysmap_teleop = sysmap_package.manipulator_teleop:main',
             'sysmap_joystick = sysmap_package.sysmap_joystick:main',
             'simple_servo3 = sysmap_package.simple_servo3_test:main',
+            'csv_recorder = sysmap_package.csv_recorder:main',
         ],
     },
 )
