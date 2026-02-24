@@ -275,10 +275,10 @@ void sendLimits() {
 
   // --- ÉTAT DES ALARMES DRIVERS (ALM) ---
   JsonArray alm = docTx["alm"].to<JsonArray>();
-  alm.add(digitalRead(MEGA_001MO_ALM) == LOW ? 1 : 0); // Moteur 1
+  alm.add(digitalRead(MEGA_001MO_ALM) == HIGH ? 1 : 0); // Moteur 1
   alm.add(0);                                          // Moteur 2 (Non câblé)
-  alm.add(digitalRead(MEGA_003MO_ALM) == LOW ? 1 : 0); // Moteur 3
-  alm.add(digitalRead(MEGA_004MO_ALM) == LOW ? 1 : 0); // Moteur 4
+  alm.add(digitalRead(MEGA_003MO_ALM) == HIGH ? 1 : 0); // Moteur 3
+  alm.add(digitalRead(MEGA_004MO_ALM) == HIGH ? 1 : 0); // Moteur 4
   
   serializeJson(docTx, Serial);
   Serial.println();
