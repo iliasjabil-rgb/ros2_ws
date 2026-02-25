@@ -11,9 +11,12 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/dual_serial_bridges.launch.py']),
-        ('share/' + package_name + '/config', ['config/bridges.params.yaml']),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        
+        # Copie TOUS les fichiers .py du dossier launch (plus d'erreur de nommage !)
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+        
+        # Copie TOUS les fichiers .yaml du dossier config
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
@@ -21,7 +24,7 @@ setup(
     maintainer_email='iliasjabil@gmail.com',
     description='ROS 2 serial bridges for Arduino MEGA and UNO',
     license='MIT',
-   entry_points={
+    entry_points={
         'console_scripts': [
             'mega_bridge = dual_serial_bridge.mega_bridge:main',
             'mega_driver = dual_serial_bridge.mega_driver:main',
