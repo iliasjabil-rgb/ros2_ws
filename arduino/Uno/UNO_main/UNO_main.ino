@@ -115,6 +115,12 @@ void setup() {
   Serial.begin(115200);          
   send_json(F("{\"src\":\"uno\",\"event\":\"BOOT_UNO_MAIN_DEBUT\"}"));
   
+  // Pré-allocation pour limiter la fragmentation RAM avec la String de réception
+  rx.reserve(128);
+  
+  // --- Initialisation Fin de course ---
+  pinMode(UNO_001FC_PIN, INPUT_PULLUP);
+
   // --- Initialisation I2C Haut Débit ---
   Wire.begin();
   Wire.setClock(400000); 
@@ -154,9 +160,9 @@ void setup() {
   }
 #endif
 
-  // --- Initialisation Relais (Toutes charges coupées par défaut) ---
-  digitalSafeWrite(UNO_001XR_PIN, LOW);
-  digitalSafeWrite(UNO_002XR_PIN, LOW);
+  // --- Initialisation Relais ---
+  digitalSafeWrite(UNO_001XR_PIN, LOW);  // Ruban LED Blanc coupé
+  digitalSafeWrite(UNO_002XR_PIN, HIGH); // Relais Ruban LED RGB activé pour l'allumage
   digitalSafeWrite(UNO_003XR_PIN, LOW);
   digitalSafeWrite(UNO_004XR_PIN, LOW);
   digitalSafeWrite(UNO_005XR_PIN, LOW);
@@ -170,8 +176,15 @@ void setup() {
 
   // --- Initialisation Ruban LED ---
   if (UNO_001LED_PIN >= 0) {
+    // Pause de sécurité (10ms) pour laisser le relais claquer avant l'envoi des données
+    delay(10);
     strip.begin();
-    strip.setBrightness(127);
+    strip.setBrightness(100);
+    
+    // On applique la couleur Blanche (255, 255, 255) à chaque LED au démarrage
+    for (int i = 0; i < LED_COUNT; i++) {
+      strip.setPixelColor(i, strip.Color(255, 255, 255));
+    }
     strip.show(); 
   }
 
@@ -230,29 +243,6 @@ void handleCmd(const String& line) {
   }
 
   // ----------------------------------------------------------------
-  // COMMANDE : LED (Couleur Fixe)
-  // ----------------------------------------------------------------
-  else if (line.indexOf("\"cmd\":\"led\"") >= 0) {
-    int r = 255, g = 255, b = 255, a = 255, p;
-
-    p = line.indexOf("\"r\":"); if (p >= 0) r = line.substring(p + 4).toInt();
-    p = line.indexOf("\"g\":"); if (p >= 0) g = line.substring(p + 4).toInt();
-    p = line.indexOf("\"b\":"); if (p >= 0) b = line.substring(p + 4).toInt();
-    p = line.indexOf("\"a\":"); if (p >= 0) a = line.substring(p + 4).toInt(); // Luminosité
-
-    r = constrain(r, 0, 255); g = constrain(g, 0, 255);
-    b = constrain(b, 0, 255); a = constrain(a, 0, 255);
-
-    if (UNO_001LED_PIN >= 0) {
-      led_effect_enabled = false; // Un ordre statique coupe l'animation SRS
-      strip.setBrightness(a); 
-      for (int i = 0; i < LED_COUNT; i++) strip.setPixelColor(i, strip.Color(r, g, b));
-      strip.show();
-    }
-    send_json(String("{\"src\":\"uno\",\"event\":\"led\",\"r\":") + r + ",\"g\":" + g + ",\"b\":" + b + ",\"a\":" + a + "}");
-  }
-
-  // ----------------------------------------------------------------
   // COMMANDE : LED_EFFECT (Animation SRS)
   // ----------------------------------------------------------------
   else if (line.indexOf("\"cmd\":\"led_effect\"") >= 0) {
@@ -270,6 +260,36 @@ void handleCmd(const String& line) {
       strip.show(); // Extinction propre
     }
     send_json(String("{\"src\":\"uno\",\"event\":\"led_effect\",\"state\":") + st + "}");
+  }
+
+  // ----------------------------------------------------------------
+  // COMMANDE : LED (Couleur Fixe)
+  // ----------------------------------------------------------------
+  else if (line.indexOf("\"cmd\":\"led\"") >= 0) {
+    // Valeurs par défaut : Blanc (255,255,255), Intensité 100, ID -1 (Toutes les LEDs)
+    int r = 255, g = 255, b = 255, a = 100, id = -1, p;
+
+    p = line.indexOf("\"id\":"); if (p >= 0) id = line.substring(p + 5).toInt();
+    p = line.indexOf("\"r\":");  if (p >= 0) r  = line.substring(p + 4).toInt();
+    p = line.indexOf("\"g\":");  if (p >= 0) g  = line.substring(p + 4).toInt();
+    p = line.indexOf("\"b\":");  if (p >= 0) b  = line.substring(p + 4).toInt();
+    p = line.indexOf("\"a\":");  if (p >= 0) a  = line.substring(p + 4).toInt(); // Luminosité
+
+    r = constrain(r, 0, 255); g = constrain(g, 0, 255);
+    b = constrain(b, 0, 255); a = constrain(a, 0, 255);
+
+    if (UNO_001LED_PIN >= 0) {
+      led_effect_enabled = false; // Un ordre statique coupe l'animation SRS
+      strip.setBrightness(a); 
+      
+      if (id >= 0 && id < LED_COUNT) {
+        strip.setPixelColor(id, strip.Color(r, g, b));
+      } else {
+        for (int i = 0; i < LED_COUNT; i++) strip.setPixelColor(i, strip.Color(r, g, b));
+      }
+      strip.show();
+    }
+    send_json(String("{\"src\":\"uno\",\"event\":\"led\",\"id\":") + id + ",\"r\":" + r + ",\"g\":" + g + ",\"b\":" + b + ",\"a\":" + a + "}");
   }
 }
 
@@ -291,8 +311,15 @@ void loop() {
       rx += c;
     }
   }
+
+  // --- 2. SÉCURITÉ FIN DE COURSE (Servo 4 - Serrage Pince) ---
+  if (digitalRead(UNO_001FC_PIN) == LOW) {
+    if (servo4.read() > 90) {
+      servo4.write(90);
+    }
+  }
   
-  // --- 2. Télémétrie périodique ---
+  // --- 3. Télémétrie périodique ---
   static uint32_t t0 = 0;
   uint32_t ms = millis();
 
@@ -352,6 +379,6 @@ void loop() {
     Serial.println('}'); // Clôture le JSON
   }
 
-  // --- 3. Mise à jour de l'animation LED (Non-bloquant) ---
+  // --- 4. Mise à jour de l'animation LED (Non-bloquant) ---
   updateLedEffect(ms);
 }
