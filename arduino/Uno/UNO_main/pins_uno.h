@@ -55,9 +55,17 @@ static const uint8_t UNO_004SV_PIN = 9;  // Serrage Pince (Préhension)
 
 /**
  * ============================================================================
+ * CAPTEURS ET ENTRÉES
+ * ============================================================================
+ */
+static const uint8_t UNO_001FC_PIN = A0; // Fin de course (Serrage Pince)
+
+
+/**
+ * ============================================================================
  * RUBAN LED ADRESSABLE (NEOPIXEL / WS2812B)
  * ============================================================================
  * Contrôle d'un ruban LED intelligent (chaque LED est indépendante).
  */
 static const uint8_t UNO_001LED_PIN   = 8;   // Broche Data du ruban
-static const uint16_t UNO_001LED_COUNT = 144; // Nombre total de LEDs sur le ruban
+static const uint16_t UNO_001LED_COUNT = 115; // Nombre total de LEDs sur le ruban
