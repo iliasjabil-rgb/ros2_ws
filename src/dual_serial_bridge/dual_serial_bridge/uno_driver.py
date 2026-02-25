@@ -36,6 +36,9 @@ class UnoDriver(Node):
         self.cmd_pub    = self.create_publisher(String, 'uno/cmd', 10)
 
         # --- 3. SUBSCRIBERS (Commandes depuis ROS 2) ---
+
+        # Écoute directe de l'Arrêt d'Urgence depuis Foxglove
+        self.stop_sub = self.create_subscription(Bool, '/cmd/stop_all', self.stop_callback, 10)
         # Télémétrie brute venant du bridge série
         self.raw_sub = self.create_subscription(String, 'uno/raw', self.raw_cb, 10)
 
@@ -225,7 +228,13 @@ class UnoDriver(Node):
             mag_msg.magnetic_field.z = self._safe_float(obj, "mz") * 1e-6
             
             self.mag_pub.publish(mag_msg)
-
+            
+    def stop_callback(self, msg: Bool):
+        """Coupe immédiatement les actionneurs si l'arrêt d'urgence est activé"""
+        if msg.data:
+            self.get_logger().error("🛑 ARRÊT D'URGENCE REÇU PAR L'UNO !")
+            # On utilise la fonction interne du driver pour envoyer le JSON proprement au Bridge
+            self.publish_cmd({"cmd": "stop"})
 
 def main(args=None):
     rclpy.init(args=args)

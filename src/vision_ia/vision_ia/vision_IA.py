@@ -2,26 +2,34 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
-from sensor_msgs.msg import CompressedImage # <--- Changement ici
+from sensor_msgs.msg import CompressedImage
 from ultralytics import YOLO
 import cv2
 import torch
-import numpy as np # <--- Nécessaire pour décoder le JPEG
-
-MODEL_PATH = "yolov8n.pt"
-CONF_THRESHOLD = 0.5
-USE_GPU = True
-SHOW_WINDOW = True
-
+import numpy as np
 
 class VisionIA(Node):
     def __init__(self):
         super().__init__('vision_IA_node')
 
-        self.get_logger().info("🔄 Chargement du modèle YOLOv8...")
-        self.model = YOLO(MODEL_PATH)
+        # --- PARAMÈTRES ROS 2 ---
+        self.declare_parameter('model_path', 'yolov8n.pt')
+        self.declare_parameter('conf_threshold', 0.5)
+        self.declare_parameter('use_gpu', True)
+        self.declare_parameter('show_window', False) # Désactivé par défaut (on utilise Foxglove)
+        self.declare_parameter('input_topic', '/video_cam/compressed')
 
-        if torch.cuda.is_available() and USE_GPU:
+        model_path = self.get_parameter('model_path').value
+        self.conf_threshold = self.get_parameter('conf_threshold').value
+        use_gpu = self.get_parameter('use_gpu').value
+        self.show_window = self.get_parameter('show_window').value
+        input_topic = self.get_parameter('input_topic').value
+
+        # --- CHARGEMENT DU MODÈLE ---
+        self.get_logger().info(f"🔄 Chargement du modèle {model_path}...")
+        self.model = YOLO(model_path)
+
+        if torch.cuda.is_available() and use_gpu:
             self.get_logger().info("✅ Utilisation du GPU (CUDA)")
             self.model.to('cuda')
         else:
@@ -30,21 +38,14 @@ class VisionIA(Node):
 
         self.window_created = False
 
-        # 1. Souscription au topic COMPRESSÉ
-        self.subscription = self.create_subscription(
-            CompressedImage,
-            '/video_cam/compressed', # <--- On écoute le nouveau flux
-            self.image_callback,
-            10
-        )
-
-        # 2. Publication (Positions + Flux COMPRESSÉ)
-        self.publisher_ = self.create_publisher(Float32MultiArray, '/position_personne', 10)
+        # --- SUBSCRIBERS & PUBLISHERS ---
+        self.subscription = self.create_subscription(CompressedImage, input_topic, self.image_callback, 10)
         
-        # On publie le résultat en compressé pour ne pas tuer le Wi-Fi vers Foxglove !
+        # Nouveau topic générique pour les détections
+        self.publisher_ = self.create_publisher(Float32MultiArray, '/vision/detections', 10)
         self.result_publisher = self.create_publisher(CompressedImage, '/video_result/compressed', 10)
 
-        self.get_logger().info("✅ Nœud YOLO prêt (Compatible CompressedImage) !")
+        self.get_logger().info("✅ Nœud YOLO prêt ! En attente des images...")
 
     def image_callback(self, msg):
         # --------- DÉCODAGE DU FLUX COMPRESSÉ ---------
@@ -52,33 +53,34 @@ class VisionIA(Node):
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         
         if frame is None:
-            self.get_logger().warning("Erreur de décodage de l'image.")
             return
 
         orig_frame = frame.copy()
 
         # --------- YOLO DETECTION ---------
-        results = self.model(frame)[0]
+        results = self.model(orig_frame)[0]
 
         positions = Float32MultiArray()
 
         for box in results.boxes:
-            if box.conf[0] < CONF_THRESHOLD:
+            conf = float(box.conf[0])
+            if conf < self.conf_threshold:
                 continue
 
-            cls = int(box.cls[0])
-            label = self.model.names[cls]
+            cls_id = int(box.cls[0])
+            label = self.model.names[cls_id]
 
             x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
 
-            # Ajouter les coordonnées
-            positions.data.extend([x1, y1, x2, y2])
+            # NOUVEAU FORMAT : [Classe, Confiance, X1, Y1, X2, Y2]
+            # Cela permet au robot de trier ce qu'il voit !
+            positions.data.extend([float(cls_id), conf, float(x1), float(y1), float(x2), float(y2)])
 
-            # Dessiner les boîtes
+            # Dessin de la boîte
             cv2.rectangle(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(
                 orig_frame,
-                f"{label}",
+                f"{label} {conf:.2f}",
                 (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
@@ -86,7 +88,7 @@ class VisionIA(Node):
                 2
             )
 
-        # Publier les coordonnées
+        # Publier les coordonnées si on a trouvé quelque chose
         if len(positions.data) > 0:
             self.publisher_.publish(positions)
 
@@ -96,18 +98,18 @@ class VisionIA(Node):
         
         if result:
             msg_out = CompressedImage()
-            msg_out.header = msg.header # On garde le même timestamp
+            msg_out.header = msg.header
             msg_out.format = "jpeg"
             msg_out.data = np.array(encoded_image).tobytes()
             self.result_publisher.publish(msg_out)
 
-        # --------- AFFICHAGE LOCAL OPENCV ---------
-        if SHOW_WINDOW:
+        # --------- AFFICHAGE LOCAL (Si activé) ---------
+        if self.show_window:
             if not self.window_created:
-                cv2.namedWindow("Détection Objets - YOLO", cv2.WINDOW_NORMAL)
+                cv2.namedWindow("Détection YOLO", cv2.WINDOW_NORMAL)
                 self.window_created = True
 
-            cv2.imshow("Détection Objets - YOLO", orig_frame)
+            cv2.imshow("Détection YOLO", orig_frame)
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 self.get_logger().info("🛑 Fermeture de la fenêtre vidéo.")
@@ -115,10 +117,9 @@ class VisionIA(Node):
                 rclpy.shutdown()
 
     def destroy_node(self):
-        if SHOW_WINDOW:
+        if self.show_window:
             cv2.destroyAllWindows()
         super().destroy_node()
-
 
 def main(args=None):
     rclpy.init(args=args)
@@ -126,7 +127,6 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

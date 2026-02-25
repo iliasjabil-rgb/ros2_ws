@@ -104,7 +104,7 @@ class SysmapJoystick(Node):
         self.srs_pub = self.create_publisher(Bool, 'led_effect/cmd', 10)
         
         # Vers MEGA
-        self.mega_cmd_pub = self.create_publisher(String, 'mega/cmd', 10)
+        self.mega_cmd_pub = self.create_publisher(String, 'mega/command', 10)
 
         # Inputs Joystick & Stop
         self.joy_sub = self.create_subscription(Joy, 'joy', self.joy_callback, 10)
