@@ -17,7 +17,7 @@ def generate_launch_description():
         Node(package='dual_serial_bridge', executable='uno_driver', name='uno_driver', output='screen'),
 
         # --- SECTION HARDWARE RPI ---
-        Node(package='dual_serial_bridge', executable='rpi_relay_node', name='rpi_relay_node', parameters=[{'relay_pin': 21}]),
+        Node(package='dual_serial_bridge', executable='rpi_relay_node', name='rpi_relay_node', parameters=[{'relay_pin': 26}]),
         Node(package='dual_serial_bridge', executable='system_monitor', name='system_monitor'),
 
         # --- SECTION VISION (Caméras optimisées) ---
