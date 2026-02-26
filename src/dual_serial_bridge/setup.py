@@ -32,6 +32,7 @@ setup(
             'uno_driver  = dual_serial_bridge.uno_driver:main',
             'system_monitor = dual_serial_bridge.system_monitor:main',
             'rpi_relay_node = dual_serial_bridge.rpi_relay_node:main',
+            'rica_srs_teleop = dual_serial_bridge.rica_srs_teleop:main',
         ],
     },
 )

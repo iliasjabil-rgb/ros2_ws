@@ -17,14 +17,14 @@ def generate_launch_description():
 
     return LaunchDescription([
         # --- INFRASTRUCTURE IHM ---
-        Node(package='foxglove_bridge', executable='foxglove_bridge', name='foxglove_bridge', output='screen', parameters=[{'port': 8766, 'address': '0.0.0.0'}]),
+        Node(package='foxglove_bridge', executable='foxglove_bridge', name='foxglove_bridge', output='screen', parameters=[{'port': 8765, 'address': '0.0.0.0'}]),
         Node(package='robot_state_publisher', executable='robot_state_publisher', name='robot_state_publisher', parameters=[{'robot_description': robot_desc}]),
         Node(package='joint_state_publisher_gui', executable='joint_state_publisher_gui', name='joint_state_publisher_gui'),
-        Node(package='dual_serial_bridge', executable='csv_recorder', name='csv_recorder', output='screen'),
+        Node(package='sysmap_package', executable='csv_recorder', name='csv_recorder', output='screen'),
         Node(package='sysmap_package', executable='recorder_manager', name='recorder_manager', output='screen'),
         
         # --- VISION IA ---
-        Node(package='vision_ia', executable='vision_node', name='vision_ia', output='screen'),
+        Node(package='vision_ia', executable='vision_IA', name='vision_IA', output='screen'),
 
         # --- MANETTES ---
         # Xbox (RICA) - device_id 0 ou 1 selon votre PC
@@ -33,7 +33,7 @@ def generate_launch_description():
         Node(package='joy', executable='joy_node', name='joy_thrustmaster', parameters=[{'device_id': 1, 'deadzone': 0.05}], remappings=[('/joy', '/thrustmaster/joy')]),
 
         # --- TRADUCTION & ROUTAGE MANETTES ---
-        Node(package='sysmap_package', executable='rica_srs_teleop', name='rica_srs_teleop', output='screen'),
+        Node(package='dual_serial_bridge', executable='rica_srs_teleop', name='rica_srs_teleop', output='screen'),
         Node(package='sysmap_package', executable='sysmap_joystick', name='sysmap_joystick', output='screen'),
         
         # Traduction Xbox -> cmd_vel
