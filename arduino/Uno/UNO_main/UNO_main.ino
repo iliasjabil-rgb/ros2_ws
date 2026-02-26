@@ -179,7 +179,7 @@ void setup() {
     // Pause de sécurité (10ms) pour laisser le relais claquer avant l'envoi des données
     delay(10);
     strip.begin();
-    strip.setBrightness(100);
+    strip.setBrightness(30);
     
     // On applique la couleur Blanche (255, 255, 255) à chaque LED au démarrage
     for (int i = 0; i < LED_COUNT; i++) {
@@ -267,7 +267,7 @@ void handleCmd(const String& line) {
   // ----------------------------------------------------------------
   else if (line.indexOf("\"cmd\":\"led\"") >= 0) {
     // Valeurs par défaut : Blanc (255,255,255), Intensité 100, ID -1 (Toutes les LEDs)
-    int r = 255, g = 255, b = 255, a = 100, id = -1, p;
+    int r = 255, g = 255, b = 255, a = 80, id = -1, p;
 
     p = line.indexOf("\"id\":"); if (p >= 0) id = line.substring(p + 5).toInt();
     p = line.indexOf("\"r\":");  if (p >= 0) r  = line.substring(p + 4).toInt();
