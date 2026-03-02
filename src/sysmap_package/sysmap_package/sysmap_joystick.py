@@ -13,8 +13,8 @@ class SysmapJoystick(Node):
         # ----------------------------
         # 1. PARAMÈTRES (VOTRE MAPPING)
         # ----------------------------
-        self.declare_parameter('axis_servo_1', 4)
-        self.declare_parameter('axis_servo_2', 5)
+        self.declare_parameter('axis_servo_1', 5)
+        self.declare_parameter('axis_servo_2', 4)
         self.declare_parameter('axis_servo_3', 2)
         self.declare_parameter('axis_led_brightness', 3)
         self.declare_parameter('axis_stepper_x', 0)
@@ -47,6 +47,8 @@ class SysmapJoystick(Node):
         self.declare_parameter('joy_deadzone', 0.15)
         self.declare_parameter('stepper_speed', 800)       
         self.declare_parameter('stepper_steps_per_loop', 200)
+        self.declare_parameter('stepper_steps_per_loop_stockage', 100)
+
         self.declare_parameter('smooth_factor', 0.15) 
 
         # Récupération des valeurs
@@ -79,6 +81,7 @@ class SysmapJoystick(Node):
 
         self.step_speed = p('stepper_speed').value
         self.step_inc = p('stepper_steps_per_loop').value
+        self.step_inc_stockage = p('stepper_steps_per_loop_stockage').value
         self.deadzone = p('joy_deadzone').value
         self.servo_speed = p('servo_speed_deg_per_s').value
         self.s3_neutral = p('servo3_neutral_deg').value
@@ -114,10 +117,7 @@ class SysmapJoystick(Node):
         self.mode_sub = self.create_subscription(String, '/cmd_mode', self.mode_callback, 10)
         self.current_mode = "IDLE" # Par défaut, sécurité activée (Joystick inactif)
 
-        # Status Monitors
-        self.status_rpi_pub = self.create_publisher(Bool, 'status/rpi', 10)
-        self.status_mega_pub = self.create_publisher(Bool, 'status/mega', 10)
-        self.mega_monitor_sub = self.create_subscription(String, 'mega/log', self.mega_watchdog_cb, 10)
+
 
         # Variables internes
         self.prev_buttons = []
@@ -133,14 +133,14 @@ class SysmapJoystick(Node):
         self.last_sent_s2 = -1
         self.last_sent_s3 = -1
         self.last_sent_s4 = -1
-        
+        self.last_led_brightness = -1.0
+
         self.states = {
             'ev1': False, 'ev2': False, 'ev3': False, 'aspi': False,
             'white': False, 'rgb': False
         }
 
         # Timer de vérification (1Hz)
-        self.create_timer(1.0, self.system_check_callback)
 
         self.get_logger().info("SysmapJoystick DÉMARRÉ (Mode IDLE par défaut - Attente 'MANUAL')")
 
@@ -160,14 +160,7 @@ class SysmapJoystick(Node):
             
         self.get_logger().info(f"JOYSTICK SÉCURITÉ : Mode changé pour -> {self.current_mode}")
 
-    def mega_watchdog_cb(self, msg):
-        self.last_mega_time = self.get_clock().now()
-
-    def system_check_callback(self):
-        self.status_rpi_pub.publish(Bool(data=True))
-        delta = (self.get_clock().now() - self.last_mega_time).nanoseconds / 1e9
-        is_mega_alive = delta < 3.0
-        self.status_mega_pub.publish(Bool(data=is_mega_alive))
+   
 
     def send_mega(self, data_dict):
         msg = String()
@@ -232,7 +225,7 @@ class SysmapJoystick(Node):
 
         # Joystick Steppers
         if self.axis_st_x < len(axes):
-            val_x = axes[self.axis_st_x]
+            val_x = -axes[self.axis_st_x]
             if abs(val_x) > self.deadzone:
                 steps = int(val_x * self.step_inc)
                 self.send_mega({"cmd": "move", "axis": AXIS_TIGE, "steps": steps, "speed": self.step_speed})
@@ -250,9 +243,9 @@ class SysmapJoystick(Node):
              self.send_mega({"cmd": "move", "axis": AXIS_RETRACT, "steps": -self.step_inc, "speed": self.step_speed})
 
         if held(self.btn_st_stock_a):
-             self.send_mega({"cmd": "move", "axis": AXIS_STOCKAGE, "steps": self.step_inc, "speed": self.step_speed})
+             self.send_mega({"cmd": "move", "axis": AXIS_STOCKAGE, "steps": self.step_inc_stockage, "speed": self.step_speed})
         elif held(self.btn_st_stock_b):
-             self.send_mega({"cmd": "move", "axis": AXIS_STOCKAGE, "steps": -self.step_inc, "speed": self.step_speed})
+             self.send_mega({"cmd": "move", "axis": AXIS_STOCKAGE, "steps": -self.step_inc_stockage, "speed": self.step_speed})
 
         # --- GESTION SERVOS (UNO) ---
         if self.axis_s1 < len(axes):
@@ -320,10 +313,13 @@ class SysmapJoystick(Node):
         toggle(self.btn_l_rgb, 'rgb', self.relay_rgb_pub)
 
         if self.axis_led < len(axes):
-            brightness = (axes[self.axis_led] + 1.0) / 2.0
-            c = ColorRGBA()
-            c.r = c.g = c.b = 1.0; c.a = brightness
-            self.led_pub.publish(c)
+         brightness = (axes[self.axis_led] + 1.0) / 2.0
+         # On envoie SEULEMENT si la luminosité a changé de plus de 2%
+         if abs(brightness - self.last_led_brightness) > 0.02:
+             c = ColorRGBA()
+             c.r = c.g = c.b = 1.0; c.a = brightness
+             self.led_pub.publish(c)
+             self.last_led_brightness = brightness
 
         self.prev_buttons = buttons
 

@@ -26,16 +26,38 @@ def generate_launch_description():
         # --- VISION IA ---
         Node(package='vision_ia', executable='vision_IA', name='vision_IA', output='screen'),
 
-        # --- MANETTES ---
-        # Xbox (RICA) - device_id 0 ou 1 selon votre PC
-        Node(package='joy', executable='joy_node', name='joy_xbox', parameters=[{'device_id': 0, 'deadzone': 0.05}], remappings=[('/joy', '/xbox/joy')]),
-        # Thrustmaster (SYSMAP)
-        Node(package='joy', executable='joy_node', name='joy_thrustmaster', parameters=[{'device_id': 1, 'deadzone': 0.05}], remappings=[('/joy', '/thrustmaster/joy')]),
+        # --- MANETTE 1 : XBOX (Base RICA) ---
+        Node(
+            package='joy_linux',          # <--- CHANGÉ ICI
+            executable='joy_linux_node',  # <--- CHANGÉ ICI
+            name='joy_xbox', 
+            parameters=[{
+                'dev': '/dev/input/by-id/usb-©Microsoft_Corporation_Controller_17ACDA2-joystick', 
+                'deadzone': 0.05
+            }], 
+            remappings=[('/joy', '/xbox/joy')]
+        ),
 
-        # --- TRADUCTION & ROUTAGE MANETTES ---
-        Node(package='dual_serial_bridge', executable='rica_srs_teleop', name='rica_srs_teleop', output='screen'),
-        Node(package='sysmap_package', executable='sysmap_joystick', name='sysmap_joystick', output='screen'),
-        
+        # --- MANETTE 2 : THRUSTMASTER (Bras SRS) ---
+        Node(
+            package='joy_linux',          # <--- CHANGÉ ICI
+            executable='joy_linux_node',  # <--- CHANGÉ ICI
+            name='joy_thrustmaster', 
+            parameters=[{
+                'dev': '/dev/input/by-id/usb-Thrustmaster_T.16000M-joystick', 
+                'deadzone': 0.05
+            }], 
+            remappings=[('/joy', '/thrustmaster/joy')]
+        ),
+
+        # --- NŒUD DE CONTRÔLE DU BRAS (SYSMAP) ---
+        Node(
+            package='sysmap_package', 
+            executable='sysmap_joystick', 
+            name='sysmap_joystick', 
+            output='screen',
+            remappings=[('/joy', '/thrustmaster/joy')] 
+        ),
         # Traduction Xbox -> cmd_vel
         Node(package='teleop_twist_joy', executable='teleop_node', name='teleop_node', parameters=[xbox_yaml], remappings=[('/joy', '/xbox/joy')]),
 
