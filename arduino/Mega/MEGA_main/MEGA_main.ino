@@ -76,8 +76,7 @@ unsigned long lastFastTelem = 0;
 unsigned long lastSlowTelem = 0;
 
 // Prototype fonction sécurité
-void checkAndRunDual(AccelStepper &stepper, uint8_t pinMin, uint8_t pinMax);
-
+void checkAndRunDual(AccelStepper &stepper, uint8_t pinMin, uint8_t pinMax, uint8_t hitState = LOW);
 /**
  * ============================================================================
  * SETUP : INITIALISATION
@@ -140,12 +139,11 @@ void setup() {
  */
 void loop() {
   
-  // --- 1. GESTION DES MOTEURS + DOUBLE SÉCURITÉ ---
-  checkAndRunDual(ST1, PIN_M1_MIN, PIN_M1_MAX);
-  checkAndRunDual(ST2, PIN_M2_MIN, PIN_M2_MAX);
-  checkAndRunDual(ST3, PIN_M3_MIN, PIN_M3_MAX);
-  checkAndRunDual(ST4, PIN_M4_MIN, PIN_M4_MAX);
-
+// --- 1. GESTION DES MOTEURS + DOUBLE SÉCURITÉ ---
+  checkAndRunDual(ST1, PIN_M1_MIN, PIN_M1_MAX, LOW);
+  checkAndRunDual(ST2, PIN_M2_MIN, PIN_M2_MAX, LOW);
+  checkAndRunDual(ST3, PIN_M3_MIN, PIN_M3_MAX, LOW);
+  checkAndRunDual(ST4, PIN_M4_MIN, PIN_M4_MAX, HIGH);
   // --- 2. LECTURE SÉRIE ---
   if (Serial.available() > 0) {
     String input = Serial.readStringUntil('\n');
@@ -176,26 +174,20 @@ void loop() {
 /**
  * @brief Vérifie les fins de course et autorise ou bloque le mouvement
  */
-void checkAndRunDual(AccelStepper &stepper, uint8_t pinMin, uint8_t pinMax) {
-  bool hit_min = (digitalRead(pinMin) == LOW);
-  bool hit_max = (digitalRead(pinMax) == LOW);
+void checkAndRunDual(AccelStepper &stepper, uint8_t pinMin, uint8_t pinMax, uint8_t hitState) {
+  bool hit_min = (digitalRead(pinMin) == hitState); // <--- UTILISE LE NOUVEL ÉTAT
+  bool hit_max = (digitalRead(pinMax) == hitState); // <--- UTILISE LE NOUVEL ÉTAT
   
-  long distance = stepper.distanceToGo(); // Positif = vers Max, Négatif = vers Min
+  long distance = stepper.distanceToGo(); 
 
-  // SÉCURITÉ MIN : Si capteur touché ET on essaye d'aller encore plus loin en négatif
   if (hit_min && distance < 0) {
-      stepper.moveTo(stepper.currentPosition());
-      stepper.stop();
+      stepper.setCurrentPosition(stepper.currentPosition());
   } 
-  // SÉCURITÉ MAX : Si capteur touché ET on essaye d'aller encore plus loin en positif
   else if (hit_max && distance > 0) {
-      stepper.moveTo(stepper.currentPosition());
-      stepper.stop();
+      stepper.setCurrentPosition(stepper.currentPosition());
   } 
-  // Mouvement autorisé
-  else {
-      stepper.run();
-  }
+  
+  stepper.run();
 }
 
 /**
@@ -213,18 +205,31 @@ void handleCmd(String line) {
     long steps = docRx["steps"];
     float speed = docRx["speed"];
     
-    if (axis < 1 || axis > 4) return; // Sécurité anti-crash pointeur
+    if (axis < 1 || axis > 4) return;
+
+    // Filtre anti-fantôme
+    bool hit_min = false;
+    bool hit_max = false;
+    if (axis == 1) { hit_min = (digitalRead(PIN_M1_MIN) == LOW); hit_max = (digitalRead(PIN_M1_MAX) == LOW); }
+    else if (axis == 2) { hit_min = (digitalRead(PIN_M2_MIN) == LOW); hit_max = (digitalRead(PIN_M2_MAX) == LOW); }
+    else if (axis == 3) { hit_min = (digitalRead(PIN_M3_MIN) == LOW); hit_max = (digitalRead(PIN_M3_MAX) == LOW); }
+    // INVERSION DU FILTRE ANTI-FANTÔME MOTEUR 4 (LOW -> HIGH)
+    else if (axis == 4) { hit_min = (digitalRead(PIN_M4_MIN) == HIGH); hit_max = (digitalRead(PIN_M4_MAX) == HIGH); }
+
+    if (steps < 0 && hit_min) return; 
+    if (steps > 0 && hit_max) return; 
     
     AccelStepper* s = (axis==1)?&ST1 : (axis==2)?&ST2 : (axis==3)?&ST3 : &ST4;
     
     if (speed > 0) s->setMaxSpeed(speed);
-    s->move(steps); // Déplacement relatif
+    s->moveTo(s->currentPosition() + steps);
   }
   else if (strcmp(cmd, "stop") == 0) {
-    ST1.stop(); ST1.moveTo(ST1.currentPosition());
-    ST2.stop(); ST2.moveTo(ST2.currentPosition());
-    ST3.stop(); ST3.moveTo(ST3.currentPosition());
-    ST4.stop(); ST4.moveTo(ST4.currentPosition());
+    // Arrêt d'urgence total
+    ST1.setCurrentPosition(ST1.currentPosition());
+    ST2.setCurrentPosition(ST2.currentPosition());
+    ST3.setCurrentPosition(ST3.currentPosition());
+    ST4.setCurrentPosition(ST4.currentPosition());
   }
   else if (strcmp(cmd, "home") == 0) {
     int axis = docRx["axis"];
@@ -270,8 +275,8 @@ void sendLimits() {
   mr.add(digitalRead(PIN_M2_MAX) == LOW ? 1 : 0);
   mr.add(digitalRead(PIN_M3_MIN) == LOW ? 1 : 0);
   mr.add(digitalRead(PIN_M3_MAX) == LOW ? 1 : 0);
-  mr.add(digitalRead(PIN_M4_MIN) == LOW ? 1 : 0);
-  mr.add(digitalRead(PIN_M4_MAX) == LOW ? 1 : 0);
+  mr.add(digitalRead(PIN_M4_MIN) == HIGH ? 1 : 0);
+  mr.add(digitalRead(PIN_M4_MAX) == HIGH ? 1 : 0);
 
   // --- ÉTAT DES ALARMES DRIVERS (ALM) ---
   JsonArray alm = docTx["alm"].to<JsonArray>();
