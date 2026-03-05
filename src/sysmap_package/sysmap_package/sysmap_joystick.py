@@ -13,6 +13,9 @@ class SysmapJoystick(Node):
         # ----------------------------
         # 1. PARAMÈTRES (VOTRE MAPPING)
         # ----------------------------
+        # --- NOUVEAU : BOUTON HOMME MORT ---
+        self.declare_parameter('button_deadman', 0) # <--- À CHANGER SELON VOTRE GÂCHETTE
+        
         self.declare_parameter('axis_servo_1', 5)
         self.declare_parameter('axis_servo_2', 4)
         self.declare_parameter('axis_servo_3', 2)
@@ -53,6 +56,8 @@ class SysmapJoystick(Node):
 
         # Récupération des valeurs
         p = self.get_parameter
+        self.btn_deadman = p('button_deadman').value # <--- RECUPERATION DU PARAMETRE
+        
         self.axis_s1 = p('axis_servo_1').value
         self.axis_s2 = p('axis_servo_2').value
         self.axis_s3 = p('axis_servo_3').value
@@ -115,16 +120,13 @@ class SysmapJoystick(Node):
 
         # ### SÉCURITÉ : GESTION DES MODES ###
         self.mode_sub = self.create_subscription(String, '/cmd_mode', self.mode_callback, 10)
-        self.current_mode = "IDLE" # Par défaut, sécurité activée (Joystick inactif)
-
-
+        self.current_mode = "IDLE" 
 
         # Variables internes
         self.prev_buttons = []
         self.servo1_angle = 90.0
         self.servo2_angle = 90.0
         self.last_time = self.get_clock().now()
-        self.last_mega_time = self.get_clock().now()
         
         self.smooth_joy_s1 = 0.0
         self.smooth_joy_s2 = 0.0
@@ -140,15 +142,10 @@ class SysmapJoystick(Node):
             'white': False, 'rgb': False
         }
 
-        # Timer de vérification (1Hz)
-
         self.get_logger().info("SysmapJoystick DÉMARRÉ (Mode IDLE par défaut - Attente 'MANUAL')")
 
-    # --- CALLBACKS SÉCURITÉ & STATUS ---
     def mode_callback(self, msg):
-        # Réception du mode depuis Foxglove
         raw_mode = msg.data.upper()
-        # Gestion du cas où Foxglove envoie un JSON String
         if "{" in raw_mode:
             try:
                 obj = json.loads(msg.data)
@@ -160,8 +157,6 @@ class SysmapJoystick(Node):
             
         self.get_logger().info(f"JOYSTICK SÉCURITÉ : Mode changé pour -> {self.current_mode}")
 
-   
-
     def send_mega(self, data_dict):
         msg = String()
         msg.data = json.dumps(data_dict)
@@ -171,9 +166,8 @@ class SysmapJoystick(Node):
         if msg.data:
             self.get_logger().warn("⚠️ STOP GÉNÉRAL ACTIVÉ ⚠️")
             self.send_mega({"cmd": "stop"})
-            self.servo1_angle = 90.0 # Retour position neutre recommandé
+            self.servo1_angle = 90.0 
             self.servo2_angle = 90.0
-            # Reset Relais
             off = Bool(data=False)
             self.relay_ev1_pub.publish(off)
             self.relay_ev2_pub.publish(off)
@@ -186,11 +180,8 @@ class SysmapJoystick(Node):
     # --- CALLBACK JOYSTICK PRINCIPAL ---
     def joy_callback(self, msg: Joy):
         
-        # ### SÉCURITÉ ABSOLUE ###
-        # Si on n'est pas en MANUEL, le joystick ne contrôle RIEN.
         if self.current_mode != "MANUAL":
             return 
-        # ########################
 
         buttons = msg.buttons
         axes = msg.axes
@@ -206,6 +197,25 @@ class SysmapJoystick(Node):
         def held(idx):
             if idx >= len(buttons): return False
             return buttons[idx] == 1
+
+        def released(idx):
+            if idx >= len(buttons): return False
+            return buttons[idx] == 0 and self.prev_buttons[idx] == 1
+
+        # #################################################
+        # SÉCURITÉ HOMME MORT (DEAD MAN'S SWITCH)
+        # #################################################
+        if not held(self.btn_deadman):
+            # Si on Vient tout juste de relâcher la gâchette
+            if released(self.btn_deadman):
+                self.get_logger().warn("🛑 GÂCHETTE RELÂCHÉE : Arrêt d'urgence des moteurs (Homme Mort) !")
+                self.send_mega({"cmd": "stop"})
+            
+            # On met à jour prev_buttons mais on sort de la boucle : 
+            # AUCUNE autre action du joystick n'est traitée.
+            self.prev_buttons = buttons
+            return
+        # #################################################
 
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
@@ -314,7 +324,6 @@ class SysmapJoystick(Node):
 
         if self.axis_led < len(axes):
          brightness = (axes[self.axis_led] + 1.0) / 2.0
-         # On envoie SEULEMENT si la luminosité a changé de plus de 2%
          if abs(brightness - self.last_led_brightness) > 0.02:
              c = ColorRGBA()
              c.r = c.g = c.b = 1.0; c.a = brightness

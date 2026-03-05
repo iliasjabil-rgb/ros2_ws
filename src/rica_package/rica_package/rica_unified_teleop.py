@@ -85,7 +85,6 @@ class UnifiedTeleop(Node):
         self.declare_parameter("poll_hz", 4.0)
 
         # 🛡️ Paramètres de sécurité (Limites des bras) 🛡️
-        # A AJUSTER EMPIRIQUEMENT sur le vrai robot
         self.declare_parameter("bras_ar_max", 50000) 
         self.declare_parameter("bras_ar_min", -1000)
 
@@ -133,7 +132,9 @@ class UnifiedTeleop(Node):
         self.create_subscription(Twist, "/cmd_vel", self.on_cmd_vel, 10)
         self.create_subscription(Joy,   "/joy",     self.on_joy,     10)
 
-        # Initialisation du robot
+        # --- Initialisation du robot : Force le Power à ON ---
+        time.sleep(0.5) 
+        self.get_logger().info("Envoi de la commande POWER 1 (Activation forcée)...")
         self._send_and_log("POWER 1")
         self.power_on = True
         self._pub_states()
@@ -191,7 +192,7 @@ class UnifiedTeleop(Node):
         self.power_on = bool(msg.data)
         self._pub_states()
 
-   # --- Base roulante (/cmd_vel → roues) ---
+    # --- Base roulante (/cmd_vel → roues) ---
     def on_cmd_vel(self, msg: Twist):
         vx, wz = msg.linear.x, msg.angular.z
         l = int(clamp((vx - 0.5*wz*self.max_speed)/self.max_speed, -1.0, 1.0)*100 + 0.5)
@@ -201,10 +202,10 @@ class UnifiedTeleop(Node):
         last_l, last_r = self.last_cmd_lr
         is_stop = (l == 0 and r == 0)
         
-        # 🚀 LE FILTRE : On ignore les variations de moins de 4% (sauf pour l'arrêt d'urgence)
+        # Filtre anti-saturation
         if not is_stop and last_l is not None and last_r is not None:
             if abs(l - last_l) < 4 and abs(r - last_r) < 4:
-                return # On annule l'envoi, la variation est trop faible !
+                return 
 
         if (l,r) == self.last_cmd_lr: return
         self.last_cmd_lr = (l,r)
@@ -212,8 +213,7 @@ class UnifiedTeleop(Node):
         self._send_and_log(f"{'AVANCER_ROUES_G' if l>=0 else 'RECULER_ROUES_G'} {abs(l)}")
         self._send_and_log(f"{'AVANCER_ROUES_D' if r>=0 else 'RECULER_ROUES_D'} {abs(r)}")
 
-
-  # --- Contrôle des pattes AV/AR avec SÉCURITÉS ---
+    # --- Contrôle des pattes AV/AR avec SÉCURITÉS ---
     def on_joy(self, msg: Joy):
         # Sécurité Homme-mort (RB)
         if not self._btn(msg, self.btn_rb): 
@@ -256,7 +256,7 @@ class UnifiedTeleop(Node):
         # --- CAS 2 : BRAS AVANT (Mode RT) ---
         elif rt_held:
             # Sécurité Bouclier (à adapter avec des limites AV si besoin)
-            if up and (self.fdc_av or self.pos_bras_av >= self.bras_ar_max): # On réutilise les mêmes limites pour l'instant
+            if up and (self.fdc_av or self.pos_bras_av >= self.bras_ar_max): 
                 speed = 0
                 self.get_logger().warn("⚠️ Limite HAUTE Avant !")
             elif not up and (self.pos_bras_av <= self.bras_ar_min):
@@ -306,8 +306,9 @@ class UnifiedTeleop(Node):
     @staticmethod
     def _axis(msg, idx): return msg.axes[idx] if 0<=idx<len(msg.axes) else 0.0
 
-def main():
-    rclpy.init()
+# --- C'EST ICI QUE LE PROBLÈME SE TROUVAIT ---
+def main(args=None):
+    rclpy.init(args=args)
     n = UnifiedTeleop()
     try:
         rclpy.spin(n)
@@ -315,11 +316,10 @@ def main():
         pass
     finally:
         try:
-            n._stop_legs_if_needed()
+            n._stop_all_legs_if_needed()
         except:
             pass
         n.destroy_node()
-        # On vérifie que ROS tourne encore avant de lui demander de s'arrêter !
         if rclpy.ok():
             try:
                 rclpy.shutdown()

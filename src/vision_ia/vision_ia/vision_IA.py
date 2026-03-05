@@ -55,6 +55,10 @@ class VisionIA(Node):
         if frame is None:
             return
 
+        # 🔄 ROTATION DE 180 DEGRÉS (Correction de la caméra à l'envers) 🔄
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
+
+        # Maintenant, l'image copiée est parfaitement à l'endroit
         orig_frame = frame.copy()
 
         # --------- YOLO DETECTION ---------
@@ -73,10 +77,9 @@ class VisionIA(Node):
             x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
 
             # NOUVEAU FORMAT : [Classe, Confiance, X1, Y1, X2, Y2]
-            # Cela permet au robot de trier ce qu'il voit !
             positions.data.extend([float(cls_id), conf, float(x1), float(y1), float(x2), float(y2)])
 
-            # Dessin de la boîte
+            # Dessin de la boîte (qui sera maintenant au bon endroit !)
             cv2.rectangle(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(
                 orig_frame,

@@ -16,6 +16,8 @@ setup(
         
         # 1. On exporte TOUS les fichiers Launch
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+
+        ('share/' + package_name + '/meshes', glob('meshes/*.STL') + glob('meshes/*.stl')),
         
         # 2. On exporte TOUS les fichiers 3D (URDF)
         (os.path.join('share', package_name, 'urdf'), glob('urdf/*.urdf')),
@@ -34,6 +36,9 @@ setup(
             'simple_servo3 = sysmap_package.simple_servo3_test:main',
             'csv_recorder = sysmap_package.csv_recorder:main',
             'recorder_manager = sysmap_package.recorder_manager:main',
+            'battery_simulator = sysmap_package.battery_simulator:main',
+            'srs_led_node = sysmap_package.srs_led_node:main',
+            'joint_state_converter = sysmap_package.joint_state_converter:main',
         ],
     },
 )

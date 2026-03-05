@@ -12,6 +12,8 @@ def generate_launch_description():
     with open(urdf_file, 'r') as infp:
         robot_desc = infp.read()
 
+    
+
     # --- 2. CONFIGURATION XBOX / RICA ---
     xbox_yaml = PathJoinSubstitution([FindPackageShare('rica_package'), 'config', 'xbox.yaml'])
 
@@ -22,6 +24,9 @@ def generate_launch_description():
         Node(package='joint_state_publisher_gui', executable='joint_state_publisher_gui', name='joint_state_publisher_gui'),
         Node(package='sysmap_package', executable='csv_recorder', name='csv_recorder', output='screen'),
         Node(package='sysmap_package', executable='recorder_manager', name='recorder_manager', output='screen'),
+
+        # --- WATCHDOG DE SYSTÈME (MONITOR) ---
+        Node(package='dual_serial_bridge', executable='system_monitor', name='system_monitor'),
         
         # --- VISION IA ---
         Node(package='vision_ia', executable='vision_IA', name='vision_IA', output='screen'),
@@ -82,6 +87,25 @@ def generate_launch_description():
             }]
         ),
 
+        # --- BATTERIE SIMULÉE ---
+        Node(package='sysmap_package', executable='battery_simulator', name='battery_simulator', output='screen'),
+
+        # --- ANIMATION SRS ---
+        Node(package='sysmap_package', executable='srs_led_node', name='srs_led_node', output='screen'),
+
         # --- INTELLIGENCE ---
         Node(package='sysmap_package', executable='robot_brain', name='robot_brain', output='screen'),
+
+
+        # Le Filtre de Madgwick qui calcule l'orientation 3D
+        Node(
+            package='imu_filter_madgwick',
+            executable='imu_filter_madgwick_node',  
+            name='imu_filter',
+            parameters=[{'use_mag': False, 'publish_tf': False}],
+            remappings=[
+                ('/imu/data_raw', '/uno/imu'),      # Il écoute votre capteur
+                ('/imu/data', '/uno/imu_filtered')  # Il crée un nouveau topic avec l'Orientation !
+            ]
+        ),
     ])
